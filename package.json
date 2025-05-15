@@ -1,0 +1,87 @@
+{
+  "name": "ai-arduino-ide-mvp",
+  "private": true,
+  "version": "0.0.0",
+  "type": "commonjs",
+  "main": "main.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "electron:dev": "cross-env NODE_ENV=development concurrently -k \"vite --host\" \"wait-on tcp:5173 && electron ./main.js\"",
+    "electron:build": "vite build && electron-builder",
+    "electron:start": "vite build && electron .",
+    "emulators:start": "firebase emulators:start",
+    "dev:emulators": "cross-env NODE_ENV=development concurrently -k \"firebase emulators:start\" \"vite --host\" \"wait-on tcp:5173 && electron ./main.js\""
+  },
+  "dependencies": {
+    "@ai-sdk/vue": "^1.2.8",
+    "@langchain/anthropic": "^0.3.19",
+    "@langchain/core": "^0.3.47",
+    "@langchain/google-genai": "^0.2.4",
+    "@langchain/langgraph": "^0.2.67",
+    "@langchain/openai": "^0.5.7",
+    "@vueuse/core": "^13.1.0",
+    "ai": "^4.3.9",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "diff": "^7.0.0",
+    "dompurify": "^3.2.5",
+    "dotenv": "^16.5.0",
+    "electron": "^29.1.0",
+    "electron-squirrel-startup": "^1.0.1",
+    "firebase": "^11.6.0",
+    "highlight.js": "^11.11.1",
+    "langchain": "^0.3.24",
+    "lucide-vue-next": "^0.488.0",
+    "marked": "^15.0.11",
+    "monaco-editor": "^0.52.2",
+    "node-fetch": "^2.7.0",
+    "openai": "^4.95.1",
+    "pinia": "^3.0.2",
+    "radix-vue": "^1.9.17",
+    "reka-ui": "^2.2.0",
+    "serialport": "^12.0.0",
+    "splitpanes": "^4.0.3",
+    "tailwind-merge": "^3.2.0",
+    "tailwindcss-animate": "^1.0.7",
+    "uuid": "^11.1.0",
+    "vue": "^3.5.13",
+    "vue-resizable-panels": "^0.0.1",
+    "vue-router": "^4.5.0",
+    "zod": "^3.24.3"
+  },
+  "devDependencies": {
+    "@types/uuid": "^10.0.0",
+    "@vitejs/plugin-vue": "^5.2.1",
+    "autoprefixer": "^10.4.21",
+    "concurrently": "^9.1.2",
+    "cross-env": "^7.0.3",
+    "electron-builder": "^24.13.3",
+    "firebase-tools": "^13.35.1",
+    "postcss": "^8.5.3",
+    "postcss-import": "^16.1.0",
+    "postcss-nested": "^7.0.2",
+    "postcss-nesting": "^13.0.1",
+    "postcss-preset-env": "^10.1.5",
+    "tailwindcss": "^3.4.17",
+    "vite": "^6.2.0",
+    "vite-plugin-monaco-editor": "^1.1.0",
+    "wait-on": "^8.0.3"
+  },
+  "build": {
+    "appId": "com.embedr.app",
+    "productName": "Embedr",
+    "directories": {
+      "output": "dist_electron"
+    },
+    "files": [
+      "dist/**/*",
+      "main.js",
+      "preload.js"
+    ],
+    "mac": {
+      "category": "public.app-category.developer-tools"
+    }
+  }
+}
