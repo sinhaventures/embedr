@@ -32,6 +32,20 @@ contextBridge.exposeInMainWorld('electronAPI', {
   uninstallLibrary: (name) => ipcRenderer.invoke('lib-uninstall', name),
   listLibraries: () => ipcRenderer.invoke('lib-list'),
   updateLibraryIndex: () => ipcRenderer.invoke('lib-update-index'),
+  
+  // --- Arduino Core Management API ---
+  updateCoreIndex: () => ipcRenderer.invoke('core-update-index'),
+  listCores: () => ipcRenderer.invoke('core-list'),
+  searchCores: (query) => ipcRenderer.invoke('core-search', query),
+  installCore: (platformPackage) => ipcRenderer.invoke('core-install', platformPackage),
+  uninstallCore: (platformPackage) => ipcRenderer.invoke('core-uninstall', platformPackage),
+  upgradeCore: (platformPackage) => ipcRenderer.invoke('core-upgrade', platformPackage),
+  onCoreInstallProgress: (callback) => ipcRenderer.on('core-install-progress', (_event, data) => callback(data)),
+  clearCoreInstallProgressListener: () => {
+    ipcRenderer.removeAllListeners('core-install-progress');
+  },
+  // --- END Arduino Core Management API ---
+  
   saveVersion: (filePath) => ipcRenderer.invoke('save-version', filePath),
   listVersions: (filePath) => ipcRenderer.invoke('list-versions', filePath),
   readVersion: (versionPath) => ipcRenderer.invoke('read-version', versionPath),
@@ -129,6 +143,39 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // New function
   cancelCopilotStream: () => ipcRenderer.send('cancel-copilot-stream'),
+
+  // --- MonacoPilot Completion API (NEW) ---
+  invokeMonacopilotCompletion: (body) => ipcRenderer.invoke('invoke-monacopilot-completion', body),
+  // --- END MonacoPilot Completion API ---
+
+  // === Checkpoint/Version related API for CopilotChat ===
+  getLatestCheckpointPathForProject: (projectPath) => ipcRenderer.invoke('get-latest-checkpoint-path', projectPath),
+  onProjectVersionChanged: (callback) => {
+    const listener = (_event, projectPath) => callback(projectPath);
+    ipcRenderer.on('project-version-changed', listener);
+    // Return a function to remove the listener
+    return () => ipcRenderer.removeListener('project-version-changed', listener);
+  },
+  // ===================================================
+
+  // === Firebase Function Invocation & External URL (NEW) ===
+  invokeFirebaseFunction: (functionName, payload) => ipcRenderer.invoke('invoke-firebase-function', functionName, payload),
+  openExternalUrl: (url) => ipcRenderer.invoke('open-external-url', url),
+  // =======================================================
+
+  // --- Auto Update API ---
+  onUpdateAvailable: (callback) => ipcRenderer.on('update-available', (_event, version) => callback(version)),
+  onUpdateDownloaded: (callback) => ipcRenderer.on('update-downloaded', (_event, version) => callback(version)),
+  onUpdateError: (callback) => ipcRenderer.on('update-error', (_event, errorMsg) => callback(errorMsg)),
+  quitAndInstallUpdate: () => ipcRenderer.send('quit-and-install-update'),
+  // It's good practice to provide a way to remove listeners if App.vue is unmounted and remounted,
+  // though for a root component like App.vue it might be less critical.
+  removeAllUpdateListeners: () => {
+    ipcRenderer.removeAllListeners('update-available');
+    ipcRenderer.removeAllListeners('update-downloaded');
+    ipcRenderer.removeAllListeners('update-error');
+  }
+  // --- END Auto Update API ---
 });
 
 console.log('Preload script loaded and contextBridge executed.');

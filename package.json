@@ -1,6 +1,8 @@
 {
-  "name": "ai-arduino-ide-mvp",
+  "name": "embedr",
   "private": true,
+  "description": "Embedr - AI Powered Arduino IDE",
+  "author": "Sinha Ventures <support@embedr.cc>",
   "version": "0.0.0",
   "type": "commonjs",
   "main": "main.js",
@@ -9,26 +11,30 @@
     "build": "vite build",
     "preview": "vite preview",
     "electron:dev": "cross-env NODE_ENV=development concurrently -k \"vite --host\" \"wait-on tcp:5173 && electron ./main.js\"",
-    "electron:build": "vite build && electron-builder",
-    "electron:start": "vite build && electron .",
+    "electron:build": "cross-env NODE_ENV=production vite build && electron-builder",
+    "electron:start": "cross-env NODE_ENV=production vite build && electron .",
     "emulators:start": "firebase emulators:start",
-    "dev:emulators": "cross-env NODE_ENV=development concurrently -k \"firebase emulators:start\" \"vite --host\" \"wait-on tcp:5173 && electron ./main.js\""
+    "dev:emulators": "cross-env NODE_ENV=development concurrently -k \"firebase emulators:start\" \"vite --host\" \"wait-on tcp:5173 && electron ./main.js\"",
+    "prepare-arduino": "node resources/arduino-cli/setup-arduino-cores.js",
+    "build:full": "./setup-and-build.sh",
+    "generate-icons": "electron-icon-builder --input=./public/icon.png --output=build"
   },
   "dependencies": {
     "@ai-sdk/vue": "^1.2.8",
     "@langchain/anthropic": "^0.3.19",
     "@langchain/core": "^0.3.47",
-    "@langchain/google-genai": "^0.2.4",
+    "@langchain/google-genai": "^0.2.9",
     "@langchain/langgraph": "^0.2.67",
     "@langchain/openai": "^0.5.7",
     "@vueuse/core": "^13.1.0",
     "ai": "^4.3.9",
+    "clang-format": "^1.8.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "diff": "^7.0.0",
     "dompurify": "^3.2.5",
     "dotenv": "^16.5.0",
-    "electron": "^29.1.0",
+    "electron-log": "^5.4.0",
     "electron-squirrel-startup": "^1.0.1",
     "firebase": "^11.6.0",
     "highlight.js": "^11.11.1",
@@ -36,6 +42,7 @@
     "lucide-vue-next": "^0.488.0",
     "marked": "^15.0.11",
     "monaco-editor": "^0.52.2",
+    "monacopilot": "^1.1.23",
     "node-fetch": "^2.7.0",
     "openai": "^4.95.1",
     "pinia": "^3.0.2",
@@ -57,7 +64,9 @@
     "autoprefixer": "^10.4.21",
     "concurrently": "^9.1.2",
     "cross-env": "^7.0.3",
+    "electron": "^29.1.0",
     "electron-builder": "^24.13.3",
+    "electron-icon-builder": "^2.0.1",
     "firebase-tools": "^13.35.1",
     "postcss": "^8.5.3",
     "postcss-import": "^16.1.0",
@@ -78,10 +87,45 @@
     "files": [
       "dist/**/*",
       "main.js",
-      "preload.js"
+      "preload.js",
+      "src/main/**/*",
+      "!src/assets/**/*",
+      "!src/components/**/*",
+      "!src/composables/**/*",
+      "!src/router/**/*",
+      "!src/App.vue",
+      "!src/index.css",
+      "!src/main.js",
+      "agent-tools.js"
+    ],
+    "extraResources": [
+      {
+        "from": "resources/arduino-cli/bin/${os}",
+        "to": "arduino-cli/bin/${os}",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "resources/arduino-cli/data",
+        "to": "arduino-cli/data",
+        "filter": [
+          "**/*"
+        ]
+      },
+      "systemprompt.md",
+      "projects.json"
     ],
     "mac": {
-      "category": "public.app-category.developer-tools"
+      "category": "public.app-category.developer-tools",
+      "icon": "build/icons/mac/icon.icns"
+    },
+    "win": {
+      "icon": "build/icons/win/icon.ico"
+    },
+    "linux": {
+      "icon": "build/icons",
+      "category": "Development"
     }
   }
 }

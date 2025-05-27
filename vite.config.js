@@ -9,7 +9,7 @@ export default defineConfig({
     vue(),
     monacoEditorPlugin({})
   ],
-  base: process.env.ELECTRON_RENDERER_URL ? './' : '/',
+  base: './',
   server: {
     host: true,
     port: 5173,

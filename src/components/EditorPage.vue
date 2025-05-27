@@ -138,263 +138,17 @@
       </div>
     </div>
     <!-- Library Manager Modal -->
-    <Dialog v-model:open="showLibraryModal">
-      <DialogContent class="sm:max-w-[800px] h-[80vh] flex flex-col bg-[#1E1E1E]">
-        <DialogHeader class="px-6 py-4">
-          <DialogTitle class="text-white/90">Library Manager</DialogTitle>
-          <DialogDescription class="text-white/60">
-            Search, install, and manage Arduino libraries
-          </DialogDescription>
-        </DialogHeader>
-        
-        <!-- Tabs Navigation -->
-        <div class="px-6 flex-shrink-0">
-          <nav class="inline-flex p-1 bg-muted rounded-lg tab_switching_bar w-full" aria-label="Library Manager tabs" style="min-width: 300px">
-            <button
-              @click="activeLibraryTab = 'search'"
-              :class="[
-                'relative flex-1 px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 ease-out',
-                activeLibraryTab === 'search' 
-                  ? 'bg-background text-foreground shadow-sm' 
-                  : 'text-muted-foreground hover:text-foreground'
-              ]"
-            >
-              Search & Install
-            </button>
-            <button
-              @click="activeLibraryTab = 'installed'"
-              :class="[
-                'relative flex-1 px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 ease-out',
-                activeLibraryTab === 'installed' 
-                  ? 'bg-background text-foreground shadow-sm' 
-                  : 'text-muted-foreground hover:text-foreground'
-              ]"
-            >
-              Installed Libraries
-            </button>
-          </nav>
-        </div>
-
-        <!-- Tab Content -->
-        <div class="flex-1 overflow-hidden mt-4">
-          <!-- Search & Install Tab -->
-          <div v-if="activeLibraryTab === 'search'" class="h-full flex flex-col px-6">
-            <div class="space-y-2 mb-4">
-              <div class="flex gap-2 items-center">
-                <input 
-                  v-model="librarySearch" 
-                  @keyup.enter="handleLibrarySearch" 
-                  placeholder="Search libraries..." 
-                  class="flex-1 h-10 rounded-md bg-[#252525] px-3 text-sm text-white/90 placeholder:text-white/40 focus:outline-none focus:ring-1 focus:ring-[#5B8EFF] border border-transparent"
-                />
-                <Button size="sm" @click="handleLibrarySearch" :disabled="searchLoading" variant="outline" class="h-10 px-5 border-white/10">
-                  Search
-                </Button>
-              </div>
-
-              <div v-if="searchLoading" class="text-sm text-white/60">
-                Searching...
-              </div>
-              
-              <div v-if="searchError" class="text-sm text-red-500">
-                {{ searchError }}
-              </div>
-            </div>
-
-            <div v-if="searchResults.length > 0" class="flex-1 overflow-hidden">
-              <div class="h-full overflow-y-auto pr-2">
-                <div v-for="lib in searchResults" :key="lib.name" class="bg-[#252525] rounded mb-2 p-3">
-                  <div class="flex items-start justify-between gap-4">
-                    <div class="space-y-1">
-                      <h4 class="font-medium text-sm text-white/90">{{ lib.name }}</h4>
-                      <p class="text-xs text-white/60">{{ lib.version ? lib.version + ' — ' : '' }}{{ lib.sentence }}</p>
-                    </div>
-                    <div>
-                      <template v-if="installedLibraries.some(inst => inst.name === lib.name)">
-                        <Button 
-                          size="sm" 
-                          variant="destructive" 
-                          @click="handleUninstallLibrary(installedLibraries.find(inst => inst.name === lib.name))" 
-                          :disabled="uninstalling === lib.name"
-                        >
-                          <span v-if="uninstalling === lib.name" class="mr-2 h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent"></span>
-                          <span v-if="uninstalling === lib.name">Uninstalling...</span>
-                          <span v-else>Uninstall</span>
-                        </Button>
-                      </template>
-                      <template v-else>
-                        <Button 
-                          size="sm" 
-                          variant="outline" 
-                          @click="handleInstallLibrary(lib)" 
-                          :disabled="installing === lib.name"
-                        >
-                          <span v-if="installing === lib.name" class="mr-2 h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent"></span>
-                          <span v-if="installing === lib.name">Installing...</span>
-                          <span v-else>Install</span>
-                        </Button>
-                      </template>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <p v-if="installError" class="text-xs text-red-500 mt-2">{{ installError }}</p>
-            </div>
-          </div>
-
-          <!-- Installed Libraries Tab -->
-          <div v-if="activeLibraryTab === 'installed'" class="h-full flex flex-col px-6">
-            <div class="flex items-center justify-between mb-4">
-              <h4 class="font-medium text-sm text-white/90">Installed Libraries</h4>
-              <Button 
-                size="sm" 
-                variant="outline" 
-                @click="handleUpdateIndex" 
-                :disabled="updatingIndex"
-                class="border-white/10"
-              >
-                <span v-if="updatingIndex" class="mr-2 h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent"></span>
-                Update Index
-              </Button>
-            </div>
-
-            <div v-if="updateError" class="text-sm text-red-500 mb-2">
-              {{ updateError }}
-            </div>
-
-            <div class="flex-1 overflow-hidden">
-              <div class="h-full overflow-y-auto pr-2">
-                <div v-for="lib in installedLibraries" :key="lib.name" class="bg-[#252525] rounded mb-2 p-3">
-                  <div class="flex items-start justify-between gap-4">
-                    <div class="space-y-1">
-                      <h4 class="font-medium text-sm text-white/90">{{ lib.name }}</h4>
-                      <p class="text-xs text-white/60">{{ lib.version }} &mdash; {{ lib.sentence }}</p>
-                    </div>
-                    <Button 
-                      size="sm" 
-                      variant="destructive" 
-                      @click="handleUninstallLibrary(lib)" 
-                      :disabled="uninstalling === lib.name"
-                    >
-                      <span v-if="uninstalling === lib.name" class="mr-2 h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent"></span>
-                      Uninstall
-                    </Button>
-                  </div>
-                </div>
-              </div>
-              <p v-if="uninstallError" class="text-xs text-red-500 mt-2">{{ uninstallError }}</p>
-            </div>
-          </div>
-        </div>
-
-        <DialogFooter class="px-6 py-4 mt-4">
-          <DialogClose asChild>
-            <Button variant="secondary" class="bg-[#252525] text-white/90 hover:bg-[#2A2A2A] border-white/10">Close</Button>
-          </DialogClose>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <LibraryManagerModal 
+      :open="showLibraryModal" 
+      @update:open="showLibraryModal = $event"
+    />
     <!-- Version History Modal -->
-    <Dialog v-model:open="showHistoryModal">
-      <DialogContent class="sm:max-w-[800px] h-[80vh] flex flex-col bg-[#1E1E1E]">
-        <DialogHeader class="px-6 py-4">
-          <DialogTitle class="text-white/90">Version History</DialogTitle>
-          <DialogDescription class="text-white/60">
-            View and restore previous versions of your sketch
-          </DialogDescription>
-        </DialogHeader>
-
-        <div class="flex-1 overflow-hidden px-6">
-          <div v-if="versionsLoading" class="h-full flex flex-col items-center justify-center gap-3">
-            <div class="animate-spin w-8 h-8 border-3 border-primary border-t-transparent rounded-full"></div>
-            <div class="text-white/60">Loading version history...</div>
-          </div>
-          <div v-else-if="versionsError" class="h-full flex flex-col items-center justify-center gap-3 text-center">
-            <div class="text-red-400">{{ versionsError }}</div>
-            <Button size="sm" variant="outline" @click="retryLoadVersions" class="border-white/10">
-              Retry Loading
-            </Button>
-          </div>
-          <div v-else-if="versions.length === 0" class="h-full flex items-center justify-center text-white/60">
-            No version history available
-          </div>
-          <div v-else class="h-full overflow-y-auto">
-            <div v-if="diffVersion" class="mb-4">
-              <div class="flex items-center justify-between mb-2">
-                <div class="text-white/90">
-                  Comparing with {{ formatVersionRelative(diffVersion.timestamp) }}
-                </div>
-                <Button size="sm" variant="ghost" @click="closeDiff">
-                  Close Diff
-                </Button>
-              </div>
-              <CodeDiffViewer :oldCode="diffVersion.content" :newCode="code" />
-            </div>
-            <div v-else-if="previewVersion" class="mb-4">
-              <div class="flex items-center justify-between mb-2">
-                <div class="text-white/90">
-                  Preview of {{ formatVersionRelative(previewVersion.timestamp) }}
-                </div>
-                <Button size="sm" variant="ghost" @click="closePreview">
-                  Close Preview
-                </Button>
-              </div>
-              <div class="bg-[#252525] rounded p-3 max-h-[300px] overflow-y-auto">
-                <pre class="text-sm text-white/90 whitespace-pre-wrap">{{ previewVersion.content }}</pre>
-              </div>
-            </div>
-            <ul class="space-y-2">
-              <li v-for="version in versions" :key="version.path" class="bg-[#252525] rounded p-3">
-                <div class="flex items-center justify-between">
-                  <div class="text-white/90">
-                    <span class="text-xs text-muted-foreground mr-2">v{{ version.version }}</span>
-                    {{ formatVersionRelative(version.timestamp) }}
-                  </div>
-                  <div class="flex gap-2">
-                    <Button 
-                      size="sm" 
-                      variant="outline" 
-                      class="border-white/10"
-                      :disabled="diffLoading === version.path"
-                      @click="handleDiff(version)"
-                    >
-                      <span v-if="diffLoading === version.path" class="mr-1 w-3 h-3 inline-block border-2 border-t-transparent border-current rounded-full animate-spin"></span>
-                      Compare
-                    </Button>
-                    <Button 
-                      size="sm" 
-                      variant="outline" 
-                      class="border-white/10"
-                      :disabled="restoreLoading === version.path"
-                      @click="handleRestore(version)"
-                    >
-                      <span v-if="restoreLoading === version.path" class="mr-1 w-3 h-3 inline-block border-2 border-t-transparent border-current rounded-full animate-spin"></span>
-                      Restore
-                    </Button>
-                    <Button 
-                      size="sm" 
-                      variant="outline" 
-                      class="border-white/10 hover:bg-red-900/20 hover:text-red-400"
-                      :disabled="deleteLoading === version.path"
-                      @click="handleDelete(version)"
-                    >
-                      <span v-if="deleteLoading === version.path" class="mr-1 w-3 h-3 inline-block border-2 border-t-transparent border-current rounded-full animate-spin"></span>
-                      Delete
-                    </Button>
-                  </div>
-                </div>
-              </li>
-            </ul>
-          </div>
-        </div>
-
-        <DialogFooter class="px-6 py-4 mt-4">
-          <DialogClose asChild>
-            <Button variant="secondary" class="bg-[#252525] text-white/90 hover:bg-[#2A2A2A] border-white/10">Close</Button>
-          </DialogClose>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <VersionHistoryModal 
+      :open="showHistoryModal" 
+      :current-ino-path="currentInoPath"
+      @update:open="showHistoryModal = $event"
+      @restore-version="handleRestoredVersionFromModal"
+    />
     <!-- Board Options Modal -->
     <Dialog :open="showBoardOptionsModal" @update:open="showBoardOptionsModal = $event">
       <DialogContent class="sm:max-w-[500px] h-[85vh] flex flex-col bg-[#1C1C1E]/90 backdrop-blur-xl border-[#323234] shadow-2xl">
@@ -460,6 +214,7 @@
                 ref="monacoEditorRef" 
                 :model-value="code" 
                 @update:model-value="handleCodeChange" 
+                :completion-invoker="invokeMonacoPilotLogic" 
                 class="h-full w-full"
               />
             </div>
@@ -487,47 +242,82 @@
                     :class="[
                       'relative flex-1 px-2 py-0.5 text-xs font-medium rounded-md transition-all duration-200 ease-out flex items-center justify-center gap-1',
                       activeTab === 'output' 
-                        ? (compileStatus === 'success'
-                            ? 'bg-green-600 text-white shadow-sm'
-                            : compileStatus === 'error'
-                              ? 'bg-red-600 text-white shadow-sm'
-                              : 'bg-background text-foreground shadow-sm')
-                        : (compileStatus === 'success'
-                            ? 'bg-transparent text-green-600'
-                            : compileStatus === 'error'
-                              ? 'bg-transparent text-red-600'
-                              : 'bg-transparent text-muted-foreground hover:text-foreground')
+                        ? 'bg-background text-foreground shadow-sm' // Standard active state
+                        : 'text-muted-foreground hover:text-foreground' // Standard inactive state
                     ]"
                   >
-                    <template v-if="compileStatus === 'success'">
-                      <span class="inline-flex items-center justify-center rounded-full bg-green-500/90 w-3.5 h-3.5">
-                        <svg class="w-2 h-2" fill="none" stroke="white" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
-                      </span>
-                    </template>
-                    <template v-else-if="compileStatus === 'error'">
-                      <span class="inline-flex items-center justify-center rounded-full bg-red-500/90 w-3.5 h-3.5">
-                        <svg class="w-2 h-2" fill="none" stroke="white" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
-                      </span>
-                    </template>
                     Output
                   </button>
                 </nav>
               </div>
               <!-- Tab Content -->
               <div
-                class="relative flex-1 bg-background font-mono text-sm min-h-0 px-4 pt-10 pb-3"
+                class="flex flex-col h-full bg-[#1E1E1E] text-sm min-h-0" 
                 v-show="activeTab === 'output'"
               >
-                <!-- Copy/Clear Buttons for Output (Now sticky relative to the container above) -->
-                <div v-if="buildOutput && buildOutput.trim() !== ''" class="absolute top-2 right-4 flex gap-1 z-10"> 
-                  <Button @click="copyBuildOutput" size="sm" variant="outline" class="h-6 px-2 text-xs">Copy</Button>
-                  <Button @click="clearBuildOutput" size="sm" variant="outline" class="h-6 px-2 text-xs">Clear</Button>
-                </div>
-                <!-- Make the pre tag scrollable -->
-                <pre 
-                  class="whitespace-pre-wrap text-left h-full overflow-y-auto"
+                <!-- Log Display Area -->
+                <div 
+                  class="flex-1 overflow-y-auto p-4 text-left"
                   ref="outputContainerRef" 
-                >{{ buildOutput }}</pre>
+                >
+                  <!-- Empty state -->
+                  <div v-if="!buildOutput.trim()" class="h-full flex flex-col items-center justify-center text-center text-gray-400">
+                    <svg class="w-12 h-12 mb-4 opacity-30" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                      <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+                      <line x1="8" y1="21" x2="16" y2="21"></line>
+                      <line x1="12" y1="17" x2="12" y2="21"></line>
+                    </svg>
+                    <p class="text-base">Build output will appear here</p>
+                    <p class="text-sm mt-2">Click Compile or Upload to get started</p>
+                  </div>
+                  
+                  <!-- Output content -->
+                  <div v-else class="text-sm"> 
+                    <!-- Status banners REMOVED from here -->
+                    
+                    <!-- Main output content -->
+                    <div class="px-2">
+                      <pre class="text-gray-300 whitespace-pre-wrap pl-2">{{ buildOutput }}</pre>
+                    </div>
+                  </div>
+                </div>
+                <!-- Bottom Button Panel -->
+                <div class="flex-shrink-0 p-2 border-t border-gray-700 flex items-center justify-between gap-2 bg-[#1E1E1E]">
+                  <!-- Status Tag (Left Aligned) -->
+                  <div 
+                    v-if="compileStatus"
+                    :class="[
+                      'flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium',
+                      compileStatus === 'success' ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'
+                    ]"
+                  >
+                    <svg v-if="compileStatus === 'success'" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+                    <svg v-if="compileStatus === 'error'" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                    <span>Status: {{ compileStatus === 'success' ? 'Success' : 'Error' }}</span>
+                  </div>
+                  <div v-else class="flex-1"></div> <!-- Spacer to push right buttons to the right -->
+
+                  <!-- Buttons (Right Aligned) -->
+                  <div class="flex items-center gap-2 ml-auto">
+                    <!-- "Ask Embedr to Fix" Button (NEW) -->
+                    <Button
+                      v-if="compileStatus === 'error'"
+                      @click="handleAskEmbedrToFixError"
+                      size="sm"
+                      variant="outline"
+                      class="h-7 px-2 text-xs border-yellow-500/50 text-yellow-400 hover:bg-yellow-700/30 hover:text-yellow-300"
+                      title="Ask Embedr to help fix this error"
+                    >
+                      <Sparkles class="w-3.5 h-3.5 mr-1" />
+                      Fix with AI
+                    </Button>
+                    <Button @click="toggleAutoScroll" size="sm" variant="outline" class="h-7 px-2 text-xs">
+                      {{ isAutoScrollEnabled ? 'Disable Auto-scroll' : 'Enable Auto-scroll' }}
+                    </Button>
+                    <Button @click="copyBuildOutput" size="sm" variant="outline" class="h-7 px-2 text-xs">Copy</Button>
+                    <Button @click="clearBuildOutput" size="sm" variant="outline" class="h-7 px-2 text-xs">Clear</Button>
+                  </div>
+                </div>
               </div>
               <!-- Use SerialMonitor component for the serial tab -->
               <div class="flex-1 min-h-0" v-show="activeTab === 'serial'">
@@ -541,6 +331,7 @@
       <Panel :defaultSize="35" :minSize="20" :maxSize="70">
         <!-- Co-pilot Section (Right) -->
         <CopilotChat 
+          ref="copilotChatRef"
           v-if="currentProject && currentProject.dir"
           :project-path="currentProject.dir" 
           :selected-board-fqbn="selectedBoard" 
@@ -548,6 +339,7 @@
           :thread-id="threadId"
           :homepage-query="homepageQuery"
           :homepage-image-data-url="homepageImageDataUrl"
+          :homepage-selected-model="homepageSelectedModel"
         />
       </Panel>
     </PanelGroup>
@@ -561,7 +353,7 @@ import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { PanelGroup, Panel, PanelResizeHandle } from 'vue-resizable-panels'
 import { useRoute } from 'vue-router'
-import { Book, History } from 'lucide-vue-next'
+import { Book, History, Sparkles } from 'lucide-vue-next' // Added Sparkles
 import {
   Dialog,
   DialogTrigger,
@@ -575,9 +367,22 @@ import {
 import CodeDiffViewer from './CodeDiffViewer.vue'
 import SerialMonitor from './SerialMonitor.vue'
 import CopilotChat from './CopilotChat.vue'
+import VersionHistoryModal from './VersionHistoryModal.vue'
+import LibraryManagerModal from './LibraryManagerModal.vue'
 
 // Firebase Auth imports (NEW)
-import { getAuth, onIdTokenChanged } from 'firebase/auth';
+import { getAuth } from 'firebase/auth'; // Keep getAuth, remove onIdTokenChanged
+
+// Function to be passed as prop to MonacoEditor
+function invokeMonacoPilotLogic(body) {
+  if (window.electronAPI && typeof window.electronAPI.invokeMonacopilotCompletion === 'function') {
+    return window.electronAPI.invokeMonacopilotCompletion(body);
+  } else {
+    console.error('[EditorPage] window.electronAPI.invokeMonacopilotCompletion is not available.');
+    // Return a promise that resolves to an error structure compatible with what Monacopilot expects
+    return Promise.resolve({ error: 'Completion service bridge not found in parent (EditorPage).' });
+  }
+}
 
 const code = ref('')
 const activeTab = ref('serial') // 'serial' or 'output'
@@ -602,6 +407,7 @@ const filteredBoards = computed(() => {
 })
 
 const monacoEditorRef = ref(null) // Ref for MonacoEditor component
+const copilotChatRef = ref(null); // Ref for CopilotChat component
 const route = useRoute()
 
 const LOCALSTORAGE_BOARD_KEY = 'embedr-selected-board';
@@ -663,6 +469,18 @@ const homepageImageDataUrl = computed(() => {
     }
   } catch {}
   console.log('[EditorPage] No image data found in localStorage.'); // Log if not found
+  return null;
+});
+
+const homepageSelectedModel = computed(() => {
+  try {
+    const pending = localStorage.getItem('embedr-pending-ai-query');
+    if (pending) {
+      const { selectedModel } = JSON.parse(pending);
+      console.log('[EditorPage] Read selectedModel from localStorage:', selectedModel);
+      return selectedModel || null;
+    }
+  } catch {}
   return null;
 });
 
@@ -822,9 +640,20 @@ const cleanupIPCListeners = () => {
   if (unsubscribeAgentCliOutput) unsubscribeAgentCliOutput();
 };
 
-function handleBack() {
-  // Use router to go back to home
-  window.$router ? window.$router.push('/home') : window.history.back()
+async function handleBack() {
+  if (isDirty.value) {
+    if (confirm("You have unsaved changes. Do you want to save them before going back?")) {
+      await saveCurrentCode();
+      // After saving, proceed to navigate back
+      window.$router ? window.$router.push('/home') : window.history.back();
+    } else {
+      // User chose not to save or to stay, so do nothing
+      return;
+    }
+  } else {
+    // No unsaved changes, navigate back directly
+    window.$router ? window.$router.push('/home') : window.history.back();
+  }
 }
 
 async function openProject(project) {
@@ -860,16 +689,31 @@ async function saveCurrentCode() {
     console.log('[saveCurrentCode] currentInoPath is not set:', currentInoPath.value)
     return
   }
+
+  // First, write the current editor content to the main .ino file
+  if (window.electronAPI?.writeFile) {
+    console.log('[saveCurrentCode] Writing current editor content to file:', currentInoPath.value);
+    await window.electronAPI.writeFile(currentInoPath.value, code.value)
+    originalContent.value = code.value // Update originalContent to match the new saved state
+    isDirty.value = false // Mark as not dirty since it's now saved
+  } else {
+    console.warn('[saveCurrentCode] writeFile API not available. Cannot save editor content to disk.');
+    return; // Cannot proceed to version saving if file write fails or isn't available
+  }
+
+  // Second, create a version checkpoint from the file that was just updated
   console.log('[saveCurrentCode] Saving version for:', currentInoPath.value)
   if (window.electronAPI?.saveVersion) {
     const res = await window.electronAPI.saveVersion(currentInoPath.value)
     console.log('[saveCurrentCode] saveVersion result:', res)
-  }
-  if (window.electronAPI?.writeFile) {
-    await window.electronAPI.writeFile(currentInoPath.value, code.value)
-    originalContent.value = code.value
-    isDirty.value = false
-    await loadVersions()
+    // If a new version was actually created (or an existing one reused), reload the versions list
+    if (res && res.success) {
+      await loadVersions() // Reload versions to reflect the new checkpoint
+    } else {
+      console.warn('[saveCurrentCode] saveVersion was not successful or did not return a success status. Versions might not be up to date.');
+    }
+  } else {
+    console.warn('[saveCurrentCode] saveVersion API not available. Cannot create version checkpoint.');
   }
 }
 
@@ -1118,13 +962,22 @@ onMounted(async () => {
     console.log('[EditorPage] electronAPI keys:', Object.keys(window.electronAPI));
   }
 
-  console.log('[Frontend] EditorPage mounted, initiating non-blocking boards/ports fetch...');
-  // Fetch boards and ports *without* await
-  fetchBoardsAndPorts(); 
+  console.log('[Frontend] EditorPage mounted, initiating blocking boards/ports fetch...');
+  // Fetch boards and ports *WITH* await
+  await fetchBoardsAndPorts(); 
 
   // Load project details if ino param exists
-  const params = new URLSearchParams(window.location.search);
-  const ino = params.get('ino');
+  // const params = new URLSearchParams(window.location.search);
+  // const ino = params.get('ino');
+  
+  // Correctly parse 'ino' from hash query parameters
+  let ino = null;
+  const hash = window.location.hash; // #/editor?ino=/path/to/sketch.ino
+  const queryParamMatch = hash.match(/\?ino=([^&]+)/);
+  if (queryParamMatch && queryParamMatch[1]) {
+    ino = decodeURIComponent(queryParamMatch[1]);
+  }
+  
   if (ino) {
     console.log('Loading file from URL param:', ino);
     try {
@@ -1200,36 +1053,7 @@ onMounted(async () => {
   // Load code (if not already loaded)
   // await loadCode(); 
 
-  // --- Firebase Auth Token Listener Setup (NEW) ---
-  const auth = getAuth();
-
-  // Listen for ID token changes (login, logout, refresh)
-  unsubscribeTokenListener = onIdTokenChanged(auth, async (user) => {
-    if (user) {
-      console.log('[Renderer:EditorPage] User token changed/available.');
-      await sendTokenToMain(user);
-    } else {
-      console.log('[Renderer:EditorPage] User logged out or token unavailable.');
-      // Optionally, clear the token in main by sending null
-      if (window.electronAPI?.setFirebaseAuthToken) {
-        await window.electronAPI.setFirebaseAuthToken(null, null);
-      }
-    }
-  });
-
-  // Listen for requests from main process to provide a token
-  if (window.electronAPI?.onRequestAuthToken) {
-    unsubscribeRequestAuthToken = window.electronAPI.onRequestAuthToken(async () => {
-      console.log('[Renderer:EditorPage] Received request-auth-token from main.');
-      const currentUser = auth.currentUser;
-      if (currentUser) {
-        await sendTokenToMain(currentUser);
-      } else {
-        console.warn('[Renderer:EditorPage] Token requested by main, but no user is signed in.');
-      }
-    });
-  }
-  // --- END Firebase Auth Token Listener Setup ---
+  // --- Firebase Auth Token Listener Setup (REMOVED) ---
 })
 
 onBeforeUnmount(() => {
@@ -1245,14 +1069,7 @@ onBeforeUnmount(() => {
     window.electronAPI.setWindowTitle('Embedr');
   }
 
-  // --- Firebase Auth Token Listener Cleanup (NEW) ---
-  if (unsubscribeTokenListener) {
-    unsubscribeTokenListener();
-  }
-  if (unsubscribeRequestAuthToken) {
-    unsubscribeRequestAuthToken();
-  }
-  // --- END Firebase Auth Token Listener Cleanup ---
+  // --- Firebase Auth Token Listener Cleanup (REMOVED) ---
 })
 
 // Make sure handleKeyDown is defined if used in listener
@@ -1274,145 +1091,301 @@ const handleKeyDown = (e) => {
 };
 
 async function handleCompile() {
-  if (compiling.value) return
-  compiling.value = true
-  buildOutput.value = '\nCompiling sketch...\n'
-  activeTab.value = 'output'
-  compileStatus.value = null
-  const baseFqbn = selectedBoard.value; 
-  // Create a plain copy for IPC
-  const options = JSON.parse(JSON.stringify(selectedBoardOptions.value || {})); 
+  if (compiling.value) return;
+  compiling.value = true;
+  buildOutput.value = '\nCompiling sketch...\n';
+  activeTab.value = 'output';
+  compileStatus.value = null;
+  const baseFqbn = selectedBoard.value;
+  const options = JSON.parse(JSON.stringify(selectedBoardOptions.value || {}));
   const sketchPath = currentInoPath.value;
 
-  if (!sketchPath || !baseFqbn) { // Check base FQBN
-    buildOutput.value += '\nError: Please select a board and open a project.'
-    compiling.value = false
-    compileStatus.value = 'error'
-    return
+  if (!sketchPath || !baseFqbn) {
+    buildOutput.value += '\nError: Please select a board and open a project.';
+    compiling.value = false;
+    compileStatus.value = 'error';
+    return;
   }
-  saveCurrentCode()
+  await saveCurrentCode();
   try {
-    // Pass baseFqbn and options separately
-    const result = await window.electronAPI.compileSketch(baseFqbn, options, sketchPath)
-    let combinedOutput = ''
-    if (result.output) combinedOutput += result.output
-    if (result.error) combinedOutput += (combinedOutput ? '\n' : '') + result.error
-    // Clear previous error highlights
+    const compileResult = await window.electronAPI.compileSketch(baseFqbn, options, sketchPath);
+    
+    // Prioritize compileResult.error for line highlighting if it indicates a direct command failure string
+    // Otherwise, use compileResult.output (which is likely JSON from arduino-cli)
+    const stringToParseForErrorLines = compileResult.error || compileResult.output || '';
+
     if (monacoEditorRef.value && monacoEditorRef.value.setErrorLines) {
-      monacoEditorRef.value.setErrorLines([])
+      monacoEditorRef.value.setErrorLines([]);
     }
-    let errorLines = []
-    if (!result.success && combinedOutput) {
-      // Try to extract error line numbers from GCC/Arduino error output
-      // Example: /path/to/file.ino:4:3: error: ...
-      const lineRegex = /\.ino:(\d+):\d+: error:/g
-      let match
-      while ((match = lineRegex.exec(combinedOutput)) !== null) {
-        errorLines.push(Number(match[1]))
-      }
-      // Also match lines like 'at /path/to/file.ino:<line>'
-      const atLineRegex = /at [^\n]*\.ino:(\d+)/g
-      while ((match = atLineRegex.exec(combinedOutput)) !== null) {
-        errorLines.push(Number(match[1]))
-      }
-      // Fallback: if 'FATAL:' or 'No such file or directory' is present and no line found, highlight line 1
-      if (errorLines.length === 0 && /FATAL:|No such file or directory/i.test(combinedOutput)) {
-        errorLines.push(1)
-      }
-      // Remove duplicates
-      errorLines = [...new Set(errorLines)]
-      if (monacoEditorRef.value && monacoEditorRef.value.setErrorLines && errorLines.length > 0) {
-        monacoEditorRef.value.setErrorLines(errorLines)
-      }
-    }
-    if (result.success) {
-      buildOutput.value += '\nCompilation successful!\n'
-      compileStatus.value = 'success'
-      if (combinedOutput) {
+
+    if (!compileResult.success) {
+      buildOutput.value += '\nCompilation failed!\n';
+      compileStatus.value = 'error';
+      let errorDisplayed = false;
+
+      if (compileResult.output) { // This is likely the JSON output from arduino-cli
         try {
-          const outputJson = JSON.parse(combinedOutput)
-          if (outputJson.compiler_out) {
-            buildOutput.value += '\nCompiler Output:\n' + outputJson.compiler_out
-          }
-          if (outputJson.compiler_err) {
-            buildOutput.value += '\nCompiler Errors:\n' + outputJson.compiler_err
-          }
-          if (outputJson.builder_result?.diagnostics?.length > 0) {
-            buildOutput.value += '\nDiagnostics:\n'
-            for (const diagnostic of outputJson.builder_result.diagnostics) {
-              buildOutput.value += `${diagnostic.severity}: ${diagnostic.message}\n`
+          const errorJson = JSON.parse(compileResult.output);
+          if (errorJson.compiler_err && errorJson.compiler_err.trim() !== '') {
+            buildOutput.value += 'Compiler Errors:\n' + errorJson.compiler_err.trim() + '\n';
+            errorDisplayed = true;
+          } else if (errorJson.builder_result?.diagnostics?.length > 0) {
+            buildOutput.value += 'Diagnostics:\n';
+            for (const diagnostic of errorJson.builder_result.diagnostics) {
+              buildOutput.value += `${diagnostic.severity}: ${diagnostic.message}\n`;
               if (diagnostic.file) {
-                buildOutput.value += `  at ${diagnostic.file}:${diagnostic.line}\n`
+                buildOutput.value += `  at ${diagnostic.file}:${diagnostic.line}\n`;
               }
             }
+            errorDisplayed = true;
           }
         } catch (e) {
-          buildOutput.value += '\nRaw output:\n' + combinedOutput
+          // JSON parsing failed, proceed to other fallbacks
+        }
+      }
+
+      if (!errorDisplayed && compileResult.error && compileResult.error.trim() !== '') {
+        // Display the direct error from exec (e.g., command failed)
+        buildOutput.value += 'Error Details:\n' + compileResult.error.trim() + '\n';
+        errorDisplayed = true;
+      }
+      
+      if (!errorDisplayed && compileResult.output && compileResult.output.trim() !== '') {
+        // Fallback to raw arduino-cli output if no specific error was parsed and it wasn't the exec error
+        buildOutput.value += 'Error Details (raw output):\n' + compileResult.output.trim() + '\n';
+        errorDisplayed = true;
+      }
+      
+      if (!errorDisplayed) {
+        buildOutput.value += 'No specific error message found. Check CLI logs if issue persists.\n';
+      }
+
+      // Error line highlighting - uses stringToParseForErrorLines
+      let errorLines = [];
+      if (stringToParseForErrorLines) {
+        const lineRegex = /\.ino:(\d+):\d+: error:/g;
+        let match;
+        while ((match = lineRegex.exec(stringToParseForErrorLines)) !== null) {
+          errorLines.push(Number(match[1]));
+        }
+        const atLineRegex = /at [^\n]*\.ino:(\d+)/g;
+        while ((match = atLineRegex.exec(stringToParseForErrorLines)) !== null) {
+          errorLines.push(Number(match[1]));
+        }
+        if (errorLines.length === 0 && /FATAL:|No such file or directory/i.test(stringToParseForErrorLines)) {
+          errorLines.push(1);
+        }
+        errorLines = [...new Set(errorLines)];
+        if (monacoEditorRef.value && monacoEditorRef.value.setErrorLines && errorLines.length > 0) {
+          monacoEditorRef.value.setErrorLines(errorLines);
         }
       }
     } else {
-      buildOutput.value += '\nCompilation failed!\n'
-      compileStatus.value = 'error'
-      if (combinedOutput) {
+      buildOutput.value += '\nCompilation successful!\n';
+      compileStatus.value = 'success';
+      if (compileResult.output) {
         try {
-          const errorJson = JSON.parse(combinedOutput)
-          if (combinedOutput.includes('text section exceeds available space')) {
-            buildOutput.value += '\nError: Sketch is too large for the selected board\'s memory.\n'
-            buildOutput.value += 'Try selecting a different partition scheme with more program space.\n'
-          } else if (errorJson.compiler_err) {
-            buildOutput.value += '\nCompiler Errors:\n' + errorJson.compiler_err
+          const outputJson = JSON.parse(compileResult.output);
+          if (outputJson.compiler_out) {
+            buildOutput.value += 'Compiler Output:\n' + outputJson.compiler_out.trim() + '\n';
           }
-          if (errorJson.builder_result?.diagnostics?.length > 0) {
-            buildOutput.value += '\nDiagnostics:\n'
-            for (const diagnostic of errorJson.builder_result.diagnostics) {
-              buildOutput.value += `${diagnostic.severity}: ${diagnostic.message}\n`
-              if (diagnostic.file) {
-                buildOutput.value += `  at ${diagnostic.file}:${diagnostic.line}\n`
+          if (outputJson.builder_result?.diagnostics?.length > 0) {
+            buildOutput.value += 'Diagnostics (Warnings):\n';
+            for (const diagnostic of outputJson.builder_result.diagnostics) {
+              if (diagnostic.severity !== 'ERROR') {
+                buildOutput.value += `${diagnostic.severity}: ${diagnostic.message}\n`;
+                if (diagnostic.file) {
+                  buildOutput.value += `  at ${diagnostic.file}:${diagnostic.line}\n`;
+                }
               }
             }
           }
         } catch (e) {
-          if (combinedOutput.includes('text section exceeds available space')) {
-            buildOutput.value += '\nError: Sketch is too large for the selected board\'s memory.\n'
-            buildOutput.value += 'Try selecting a different partition scheme with more program space.\n'
-          } else {
-            buildOutput.value += '\nError Details:\n' + combinedOutput
-          }
+          buildOutput.value += 'Raw output:\n' + compileResult.output.trim() + '\n';
         }
       }
     }
   } catch (e) {
-    buildOutput.value += '\nUnexpected error: ' + e.message
-    compileStatus.value = 'error'
+    buildOutput.value += '\nUnexpected error: ' + e.message + '\n';
+    compileStatus.value = 'error';
   }
-  compiling.value = false
+  compiling.value = false;
 }
 
 async function handleUpload() {
-  buildOutput.value += '\nUploading sketch...\n'
-  activeTab.value = 'output'
+  if (compiling.value) return;
+  compiling.value = true;
+  activeTab.value = 'output';
+  compileStatus.value = null;
+  buildOutput.value = 'Starting build and upload process...\n';
+
   const baseFqbn = selectedBoard.value;
-  // Create a plain copy for IPC
   const options = JSON.parse(JSON.stringify(selectedBoardOptions.value || {}));
-  const port = selectedPort.value; 
+  const port = selectedPort.value;
   const sketchPath = currentInoPath.value;
 
-  if (!sketchPath || !baseFqbn || !port) { // Check base FQBN
-    buildOutput.value += '\nError: Please select a board, port, and open a project.'
-    return
+  if (!sketchPath || !baseFqbn || !port) {
+    buildOutput.value += 'Error: Please select a board, port, and open a project.\n';
+    compileStatus.value = 'error';
+    compiling.value = false;
+    return;
   }
-  saveCurrentCode()
+
+  await saveCurrentCode();
+
+  // --- Compilation Step ---
+  buildOutput.value += '\nCompiling sketch...\n';
   try {
-    // Pass baseFqbn and options separately
-    const result = await window.electronAPI.uploadSketch(baseFqbn, options, port, sketchPath)
-    if (result.success) {
-      buildOutput.value += '\n' + result.output
+    const compileResult = await window.electronAPI.compileSketch(baseFqbn, options, sketchPath);
+    const stringToParseForErrorLines = compileResult.error || compileResult.output || '';
+
+    if (monacoEditorRef.value && monacoEditorRef.value.setErrorLines) {
+      monacoEditorRef.value.setErrorLines([]);
+    }
+
+    if (!compileResult.success) {
+      buildOutput.value += '\nCompilation failed!\n';
+      compileStatus.value = 'error';
+      let errorDisplayed = false;
+
+      if (compileResult.output) { // This is likely the JSON output from arduino-cli
+        try {
+          const errorJson = JSON.parse(compileResult.output);
+          if (errorJson.compiler_err && errorJson.compiler_err.trim() !== '') {
+            buildOutput.value += 'Compiler Errors:\n' + errorJson.compiler_err.trim() + '\n';
+            errorDisplayed = true;
+          } else if (errorJson.builder_result?.diagnostics?.length > 0) {
+            buildOutput.value += 'Diagnostics:\n';
+            for (const diagnostic of errorJson.builder_result.diagnostics) {
+              buildOutput.value += `${diagnostic.severity}: ${diagnostic.message}\n`;
+              if (diagnostic.file) {
+                buildOutput.value += `  at ${diagnostic.file}:${diagnostic.line}\n`;
+              }
+            }
+            errorDisplayed = true;
+          }
+        } catch (e) {
+          // JSON parsing failed, proceed to other fallbacks
+        }
+      }
+
+      if (!errorDisplayed && compileResult.error && compileResult.error.trim() !== '') {
+        buildOutput.value += 'Error Details:\n' + compileResult.error.trim() + '\n';
+        errorDisplayed = true;
+      }
+      
+      if (!errorDisplayed && compileResult.output && compileResult.output.trim() !== '') {
+        buildOutput.value += 'Error Details (raw output):\n' + compileResult.output.trim() + '\n';
+        errorDisplayed = true;
+      }
+
+      if (!errorDisplayed) {
+        buildOutput.value += 'No specific error message found. Check CLI logs if issue persists.\n';
+      }
+
+      // Error line highlighting
+      let errorLines = [];
+      if (stringToParseForErrorLines) {
+        const lineRegex = /\.ino:(\d+):\d+: error:/g;
+        let match;
+        while ((match = lineRegex.exec(stringToParseForErrorLines)) !== null) {
+          errorLines.push(Number(match[1]));
+        }
+        const atLineRegex = /at [^\n]*\.ino:(\d+)/g;
+        while ((match = atLineRegex.exec(stringToParseForErrorLines)) !== null) {
+          errorLines.push(Number(match[1]));
+        }
+        if (errorLines.length === 0 && /FATAL:|No such file or directory/i.test(stringToParseForErrorLines)) {
+          errorLines.push(1);
+        }
+        errorLines = [...new Set(errorLines)];
+        if (monacoEditorRef.value && monacoEditorRef.value.setErrorLines && errorLines.length > 0) {
+          monacoEditorRef.value.setErrorLines(errorLines);
+        }
+      }
+      compiling.value = false;
+      return;
+    }
+
+    // Compilation was successful
+    buildOutput.value += '\nCompilation successful!\n';
+    if (compileResult.output) {
+      try {
+        const outputJson = JSON.parse(compileResult.output);
+        if (outputJson.compiler_out) {
+          buildOutput.value += 'Compiler Output:\n' + outputJson.compiler_out.trim() + '\n';
+        }
+        if (outputJson.builder_result?.diagnostics?.length > 0) {
+          buildOutput.value += 'Diagnostics (Warnings):\n';
+            for (const diagnostic of outputJson.builder_result.diagnostics) {
+              if (diagnostic.severity !== 'ERROR') {
+                buildOutput.value += `${diagnostic.severity}: ${diagnostic.message}\n`;
+                if (diagnostic.file) {
+                  buildOutput.value += `  at ${diagnostic.file}:${diagnostic.line}\n`;
+                }
+              }
+            }
+        }
+      } catch (e) {
+        buildOutput.value += 'Raw output:\n' + compileResult.output.trim() + '\n';
+      }
+    }
+    compileStatus.value = 'success';
+
+    // --- Upload Step (remains the same) ---
+    buildOutput.value += `\n\nAttempting to upload to ${port} using board ${fullFqbnFromParts(baseFqbn, options)}...\n`;
+    const uploadResult = await window.electronAPI.uploadSketch(baseFqbn, options, port, sketchPath);
+
+    if (uploadResult.details) {
+      buildOutput.value += `\n[Uploader Command Executed]\n${uploadResult.details.trim()}\n`;
+    }
+    buildOutput.value += "\n[Uploader Output Log]\n";
+
+    if (uploadResult.success) {
+      if (uploadResult.output) {
+        buildOutput.value += uploadResult.output;
+      }
+      if (uploadResult.output && (uploadResult.output.toLowerCase().includes('verify successful') || uploadResult.output.toLowerCase().includes('avrdude done.  thank you.'))) {
+        buildOutput.value += '\n\nUpload successful!\n';
+        compileStatus.value = 'success';
+      } else if (uploadResult.output) {
+        buildOutput.value += '\n\nUpload appears to have completed (check log for details).\n';
+        compileStatus.value = 'success';
+      } else {
+        buildOutput.value += '\n\nUpload successful (no detailed log returned).\n';
+        compileStatus.value = 'success';
+      }
     } else {
-      buildOutput.value += '\nError: ' + result.error
+      if (uploadResult.output) {
+        buildOutput.value += uploadResult.output;
+      }
+      buildOutput.value += '\n\nUpload failed!\n';
+      if (uploadResult.error) {
+        buildOutput.value += 'Error: ' + uploadResult.error.trim() + '\n';
+      }
+      compileStatus.value = 'error';
     }
   } catch (e) {
-    buildOutput.value += '\nUnexpected error: ' + e.message
+    buildOutput.value += '\n\nUnexpected error during operation: ' + e.message + '\n';
+    compileStatus.value = 'error';
+  } finally {
+    compiling.value = false;
   }
+}
+
+// Helper to reconstruct FQBN for display purposes, similar to main.js but client-side
+function fullFqbnFromParts(baseFqbn, options) {
+  if (!baseFqbn) return '';
+  let fullFqbn = baseFqbn;
+  if (options && typeof options === 'object' && Object.keys(options).length > 0) {
+    const optionString = Object.entries(options)
+      .map(([key, value]) => `${key}=${value}`)
+      .join(',');
+    if (optionString) {
+      fullFqbn += `:${optionString}`;
+    }
+  }
+  return fullFqbn;
 }
 
 watch(boards, (newBoards) => {
@@ -1546,7 +1519,7 @@ function openLibraryModal() {
 }
 
 watch([buildOutput, activeTab], ([newOutput, newTab]) => {
-  if (newTab === 'output' && outputContainerRef.value) {
+  if (newTab === 'output' && outputContainerRef.value && isAutoScrollEnabled.value) { // Check isAutoScrollEnabled
     nextTick(() => {
       const el = outputContainerRef.value
       el.scrollTop = el.scrollHeight
@@ -1613,30 +1586,51 @@ watch(showHistoryModal, (newValue) => {
     previewLoading.value = null
     restoreLoading.value = null
     versionsError.value = null
-    diffVersion.value = null
+    diffVersion.value = null // This will clear oldContentForDiff, newContentForDiff, and targetVersionInfo
     diffLoading.value = null
     deleteLoading.value = null
   }
 })
 
-async function handleDiff(version) {
-  if (diffLoading.value === version.path) return
+async function handleDiff(selectedVersionToViewChangesFor, index) {
+  if (diffLoading.value === selectedVersionToViewChangesFor.path) return;
   
-  // Close preview if open
-  previewVersion.value = null
-  
-  diffLoading.value = version.path
+  previewVersion.value = null; // Close preview if open
+  diffLoading.value = selectedVersionToViewChangesFor.path;
+
   try {
-    const res = await window.electronAPI.readVersion(version.path)
-    console.log('[handleDiff] readVersion result:', res)
-    diffVersion.value = {
-      ...version,
-      content: res && typeof res.content === 'string' ? res.content : ''
+    // Fetch content for the selected version (this is the "NEW" side)
+    const newSideRes = await window.electronAPI.readVersion(selectedVersionToViewChangesFor.path);
+    const newSideContent = newSideRes && typeof newSideRes.content === 'string' ? newSideRes.content : '';
+
+    let oldSideContent = '';
+    const previousVersionIndex = index + 1; // versions array is sorted newest first
+
+    if (previousVersionIndex < versions.value.length) {
+      // There is a previous version
+      const previousVersion = versions.value[previousVersionIndex];
+      console.log(`[handleDiff] Fetching previous version for old side: v${previousVersion.version} (${previousVersion.filename})`);
+      const oldSideRes = await window.electronAPI.readVersion(previousVersion.path);
+      oldSideContent = oldSideRes && typeof oldSideRes.content === 'string' ? oldSideRes.content : '';
+      console.log(`[handleDiff] Comparing: v${previousVersion.version} (old) vs v${selectedVersionToViewChangesFor.version} (new)`);
+    } else {
+      // This is the oldest version (or the only version), compare it to an empty state.
+      console.log(`[handleDiff] Showing oldest version v${selectedVersionToViewChangesFor.version} (${selectedVersionToViewChangesFor.filename}) as all new changes (compared to empty).`);
+      oldSideContent = '';
     }
+
+    diffVersion.value = {
+      oldContentForDiff: oldSideContent,
+      newContentForDiff: newSideContent,
+      targetVersionInfo: selectedVersionToViewChangesFor 
+    };
+
   } catch (e) {
-    console.error('Error loading diff:', e)
+    console.error('Error loading diff:', e);
+    alert('Failed to load comparison. Please try again.'); // Inform user
+    diffVersion.value = null; // Clear diff state on error
   } finally {
-    diffLoading.value = null
+    diffLoading.value = null;
   }
 }
 
@@ -1676,24 +1670,66 @@ async function handleDelete(version) {
 function formatVersionRelative(ts) {
   console.log('[formatVersionRelative] raw timestamp:', ts)
   if (!ts) return 'Invalid Date'
-  // Remove .ino if present
-  ts = ts.replace(/\.ino$/, '')
-  // If ends with Z, remove it temporarily
-  let hasZ = ts.endsWith('Z')
-  if (hasZ) ts = ts.slice(0, -1)
-  // Try to match the most common pattern
-  let match = ts.match(/^([0-9-]+)T([0-9-]+)-([0-9]+)$/)
-  let iso
-  if (match) {
-    // e.g. 2025-04-21T04-41-46-5677
-    iso = match[1] + 'T' + match[2].replace(/-/g, ':') + '.' + match[3]
+
+  // The timestamp 'ts' is expected to be in the format YYYY-MM-DDTHH-mm-ss-sssZ
+  // as generated by `new Date().toISOString().replace(/[:.]/g, '-')` in main.js
+
+  let isoString = ts;
+  if (isoString.endsWith('Z')) {
+    // Separate date, time, and millisecond parts more directly
+    const parts = isoString.slice(0, -1).split('T'); // Remove Z and split Date from Time+MS
+    if (parts.length === 2) {
+      const datePart = parts[0]; // YYYY-MM-DD
+      const timeAndMsPart = parts[1]; // HH-mm-ss-sss
+
+      const timeMsSegments = timeAndMsPart.split('-');
+      if (timeMsSegments.length === 4) { // HH, mm, ss, sss
+        const HH = timeMsSegments[0];
+        const mm = timeMsSegments[1];
+        const ss = timeMsSegments[2];
+        const sss = timeMsSegments[3];
+        isoString = `${datePart}T${HH}:${mm}:${ss}.${sss}Z`;
+      } else {
+        // Fallback if time/ms part is not as expected, try original regex logic
+        // This section retains the original regex-based parsing as a fallback
+        // if the direct splitting method fails, e.g. due to an unexpected format.
+        let hasZ = ts.endsWith('Z');
+        let tempTs = ts;
+        if (tempTs.endsWith('.ino')) tempTs = tempTs.slice(0, -'.ino'.length); // Handle if .ino was somehow passed
+        if (hasZ) tempTs = tempTs.slice(0, -1);
+
+        let match = tempTs.match(/^([0-9-]+)T([0-9-]+)-([0-9]+)$/);
+        if (match) {
+          isoString = match[1] + 'T' + match[2].replace(/-/g, ':') + '.' + match[3];
+          if (hasZ) isoString += 'Z';
+        } else {
+          // If primary regex also fails, mark as invalid to avoid bad Date object
+          console.warn('[formatVersionRelative] Could not parse timestamp with direct split or regex:', ts);
+          isoString = 'invalid'; 
+        }
+      }
+    } else {
+       console.warn('[formatVersionRelative] Could not split timestamp into Date and Time parts:', ts);
+       isoString = 'invalid'; // Mark as invalid
+    }
   } else {
-    // fallback: replace last dash with dot in the time part
-    iso = ts.replace(/T(\d{2})-(\d{2})-(\d{2})-(\d+)$/, (m, h, m2, s, ms) => `T${h}:${m2}:${s}.${ms}`)
+    // If 'Z' is not present, it's likely an unexpected format.
+    // Attempt original regex logic as a last resort without Z.
+    let tempTs = ts;
+    if (tempTs.endsWith('.ino')) tempTs = tempTs.slice(0, -'.ino'.length);
+    let match = tempTs.match(/^([0-9-]+)T([0-9-]+)-([0-9]+)$/);
+    if (match) {
+      isoString = match[1] + 'T' + match[2].replace(/-/g, ':') + '.' + match[3];
+    } else {
+      console.warn('[formatVersionRelative] Timestamp does not end with Z and regex failed:', ts);
+      isoString = 'invalid';
+    }
   }
-  if (hasZ) iso += 'Z'
-  console.log('[formatVersionRelative] processed timestamp:', iso)
-  const d = new Date(iso)
+  
+  console.log('[formatVersionRelative] processed timestamp for Date constructor:', isoString)
+  if (isoString === 'invalid') return 'Invalid Date';
+
+  const d = new Date(isoString)
   console.log('[formatVersionRelative] Date object:', d, 'isNaN:', isNaN(d))
   if (isNaN(d)) return 'Invalid Date'
   const now = new Date()
@@ -1747,26 +1783,98 @@ async function handleBoardOptionsSubmit() {
   }
 }
 
-// --- Firebase Auth Token Management (NEW) ---
-let unsubscribeTokenListener = null;
-let unsubscribeRequestAuthToken = null;
-
-// Function to send token to main process
-async function sendTokenToMain(user) {
-  if (user && window.electronAPI?.setFirebaseAuthToken) {
-    try {
-      const token = await user.getIdToken();
-      const claims = (await user.getIdTokenResult()).claims;
-      const expiryTime = claims.exp * 1000; // Convert seconds to milliseconds
-      
-      console.log('[Renderer:EditorPage] Sending token to main. Expiry:', new Date(expiryTime));
-      await window.electronAPI.setFirebaseAuthToken(token, expiryTime);
-    } catch (error) {
-      console.error('[Renderer:EditorPage] Error sending token to main:', error);
-    }
+// --- NEW: Handle asking Embedr to fix error ---
+async function handleAskEmbedrToFixError() {
+  if (buildOutput.value && copilotChatRef.value) {
+    const errorQuery = "Fix this error: \\\\n```text\\\\n" + buildOutput.value + "\\\\n```";
+    copilotChatRef.value.sendMessageFromEditor(errorQuery);
+    compileStatus.value = null; // Make the button disappear and clear status
+    // No need to switch activeTab, CopilotChat is in its own panel
+  } else {
+    console.warn('[handleAskEmbedrToFixError] buildOutput is empty or copilotChatRef is not available.');
   }
 }
-// --- END Firebase Auth Token Management ---
+// --- End NEW ---
+
+const processedBuildOutput = computed(() => {
+  if (!buildOutput.value.trim()) return [];
+  
+  const lines = buildOutput.value.split('\n');
+  const sections = [];
+  let currentSection = { type: 'normal', content: '' };
+  
+  for (const line of lines) {
+    // Headers
+    if (line.includes('Compiling sketch...') || line.includes('Uploading sketch...')) {
+      if (currentSection.content) sections.push(currentSection);
+      currentSection = { type: 'header', content: line };
+      sections.push(currentSection);
+      currentSection = { type: 'normal', content: '' };
+      continue;
+    }
+    
+    // Subheaders
+    if (line.includes('Compiler Output:') || line.includes('Compilation successful!') || line.includes('Upload successful!')) {
+      if (currentSection.content) sections.push(currentSection);
+      currentSection = { type: 'subheader', content: line };
+      sections.push(currentSection);
+      currentSection = { type: 'normal', content: '' };
+      continue;
+    }
+    
+    // Error messages
+    if (line.includes('Error:') || line.toLowerCase().includes('failed') || line.includes('text section exceeds available space')) {
+      if (currentSection.content) sections.push(currentSection);
+      currentSection = { type: 'error', content: line };
+      sections.push(currentSection);
+      currentSection = { type: 'normal', content: '' };
+      continue;
+    }
+    
+    // Success messages
+    if (line.includes('Compilation successful!') || line.includes('Upload successful!')) {
+      if (currentSection.content) sections.push(currentSection);
+      currentSection = { type: 'success', content: line };
+      sections.push(currentSection);
+      currentSection = { type: 'normal', content: '' };
+      continue;
+    }
+    
+    // Stats sections (memory usage)
+    if (line.includes('bytes') && (line.includes('program storage') || line.includes('dynamic memory'))) {
+      if (currentSection.content) sections.push(currentSection);
+      currentSection = { type: 'stats', content: line };
+      sections.push(currentSection);
+      currentSection = { type: 'normal', content: '' };
+      continue;
+    }
+    
+    // Append to current section
+    if (currentSection.content) {
+      currentSection.content += '\n' + line;
+    } else {
+      currentSection.content = line;
+    }
+  }
+  
+  // Add the last section if it has content
+  if (currentSection.content) sections.push(currentSection);
+  
+  return sections;
+});
+
+function handleRestoredVersionFromModal(newCode) {
+  code.value = newCode;
+  originalContent.value = newCode; // Assume restored version becomes the new 'original'
+  isDirty.value = false; // Mark as not dirty initially
+  // If you want to mark it as dirty to prompt a save, set isDirty.value = true
+}
+
+const isAutoScrollEnabled = ref(true);
+
+function toggleAutoScroll() {
+  isAutoScrollEnabled.value = !isAutoScrollEnabled.value;
+}
 </script>
 
 <style scoped>

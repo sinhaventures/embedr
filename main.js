@@ -1,11 +1,11 @@
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, dialog } = require('electron');
 const path = require('path');
 const { exec, spawn } = require('child_process');
 const fs = require('fs');
 const os = require('os');
 const { SerialPort } = require('serialport');
 const { v4: uuidv4 } = require('uuid');
-const { ChatGoogleGenerativeAI } = require('@langchain/google-genai');
+// const { ChatGoogleGenerativeAI } = require('@langchain/google-genai'); // Commented out
 const { ChatOpenAI } = require('@langchain/openai');
 const { ChatAnthropic } = require('@langchain/anthropic');
 const { createReactAgent } = require('@langchain/langgraph/prebuilt');
@@ -13,45 +13,52 @@ const { MemorySaver, StateGraph, Command } = require('@langchain/langgraph');
 const { tool, StructuredTool } = require('@langchain/core/tools');
 const { z } = require('zod');
 const { AIMessageChunk } = require("@langchain/core/messages");
+const { autoUpdater } = require('electron-updater'); // Added for auto-update
+const log = require('electron-log'); // Added for auto-update logging
+
+// Configure logging for electron-updater
+autoUpdater.logger = log;
+autoUpdater.logger.transports.file.level = 'info';
+log.info('App starting...');
 
 // === AI Co-pilot/Agent dependencies ===
-require('dotenv').config();
+//require('dotenv').config();
 
-// === Gemini LLM Model Initialization ===
-// Debug: Check if API key is loaded
-console.log('GOOGLE_API_KEY loaded:', process.env.GOOGLE_API_KEY ? 'Yes' : 'No');
-// If you want to see the key itself (use with caution, remove after debugging):
-// console.log('Loaded API Key:', process.env.GOOGLE_API_KEY);
-
-const chatModel = new ChatGoogleGenerativeAI({
-  apiKey: process.env.GOOGLE_API_KEY,
-  model: 'gemini-2.5-pro-exp-03-25',
-  // temperature: 0.2, // Removed for testing
-  streaming: true, // Enable streaming capabilities
-  maxOutputTokens: 2048, // Set a reasonable token limit
-});
-
-// After model initialization, log detailed info about the model
-console.log('ChatGoogleGenerativeAI model initialized:', {
-  hasStreamMethod: typeof chatModel.stream === 'function',
-  hasStreamCallMethod: typeof chatModel.streamCall === 'function',
-  hasInvokeMethod: typeof chatModel.invoke === 'function',
-  modelApiVersion: chatModel.modelApiVersion || 'unknown',
-  apiKey: process.env.GOOGLE_API_KEY ? '[REDACTED]' : undefined,
-  model: chatModel.model || 'unknown',
-  modelProperties: Object.keys(chatModel),
-});
-
-// Log information about @langchain/google-genai version
-try {
-  console.log('Checking @langchain/google-genai package details:');
-  const packageJsonPath = require.resolve('@langchain/google-genai/package.json');
-  const packageInfo = require(packageJsonPath);
-  console.log('  Version:', packageInfo.version);
-  console.log('  Dependencies:', packageInfo.dependencies);
-} catch (err) {
-  console.error('Error loading @langchain/google-genai package details:', err.message);
-}
+// === Gemini LLM Model Initialization (OLD - COMMENTED OUT) === 
+// console.log('GOOGLE_API_KEY loaded:', process.env.GOOGLE_API_KEY ? 'Yes' : 'No');
+// // If you want to see the key itself (use with caution, remove after debugging):
+// // console.log('Loaded API Key:', process.env.GOOGLE_API_KEY);
+// 
+// const chatModel = new ChatGoogleGenerativeAI({  // This global instance is no longer the primary chat model
+//   apiKey: process.env.GOOGLE_API_KEY,
+//   model: 'gemini-2.5-pro-preview-05-06',
+//   // temperature: 0.2, // Removed for testing
+//   streaming: true, // Enable streaming capabilities
+//   maxOutputTokens: 2048, // Set a reasonable token limit
+// });
+// 
+// // After model initialization, log detailed info about the model
+// console.log('Old ChatGoogleGenerativeAI model was initialized:', {
+//   hasStreamMethod: typeof chatModel.stream === 'function',
+//   hasStreamCallMethod: typeof chatModel.streamCall === 'function',
+//   hasInvokeMethod: typeof chatModel.invoke === 'function',
+//   modelApiVersion: chatModel.modelApiVersion || 'unknown',
+//   apiKey: process.env.GOOGLE_API_KEY ? '[REDACTED]' : undefined,
+//   model: chatModel.model || 'unknown',
+//   modelProperties: Object.keys(chatModel),
+// });
+// 
+// // Log information about @langchain/google-genai version
+// try {
+//   console.log('Checking @langchain/google-genai package details:');
+//   const packageJsonPath = require.resolve('@langchain/google-genai/package.json');
+//   const packageInfo = require(packageJsonPath);
+//   console.log('  Version:', packageInfo.version);
+//   console.log('  Dependencies:', packageInfo.dependencies);
+// } catch (err) {
+//   console.error('Error loading @langchain/google-genai package details:', err.message);
+// }
+// === END OLD Gemini LLM Model Initialization ===
 
 let activeSerialPort = null; // Variable to hold the active serial connection
 let fileChangeDebounceTimers = {};
@@ -81,6 +88,8 @@ function createWindow () {
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
+    minWidth: 1100,
+    minHeight: 800,
     webPreferences: {
       preload: path.resolve(APP_ROOT, 'preload.js'),
       nodeIntegration: false,
@@ -116,6 +125,15 @@ function createWindow () {
 app.whenReady().then(() => {
   createWindow();
 
+  // Check for updates after the app is ready and window is created
+  // It's often good to wait a few seconds so the app is responsive
+  setTimeout(() => {
+    if (process.env.NODE_ENV !== 'development' && !process.env.ELECTRON_IS_DEV) { // Don't auto-update in dev
+        log.info('[Main Process] Checking for updates (no direct notify)...');
+        autoUpdater.checkForUpdates(); // Changed from checkForUpdatesAndNotify
+    }
+  }, 10000); // Increased delay to 10s to ensure app is fully up
+
   app.on('activate', () => {
     // On OS X it's common to re-create a window in the app when the
     // dock icon is clicked and there are no other windows open.
@@ -134,7 +152,61 @@ app.on('window-all-closed', () => {
   }
 });
 
-const PROJECTS_FILE = path.resolve(APP_ROOT, 'projects.json');
+// --- Auto Updater Events ---
+autoUpdater.on('checking-for-update', () => {
+  log.info('[Main Process] Checking for update...');
+  // No direct UI from main, renderer will handle UI based on events
+});
+
+autoUpdater.on('update-available', (info) => {
+  log.info('[Main Process] Update available.', info);
+  if (mainWindow) {
+    mainWindow.webContents.send('update-available', info.version);
+  }
+});
+
+autoUpdater.on('update-not-available', (info) => {
+  log.info('[Main Process] Update not available.', info);
+  // Optionally, could send an event if you want UI feedback for this
+});
+
+autoUpdater.on('error', (err) => {
+  log.error('[Main Process] Error in auto-updater. ' + err);
+  if (mainWindow) {
+    mainWindow.webContents.send('update-error', err.message);
+  }
+});
+
+autoUpdater.on('download-progress', (progressObj) => {
+  let log_message = 'Download speed: ' + progressObj.bytesPerSecond;
+  log_message = log_message + ' - Downloaded ' + progressObj.percent + '%';
+  log_message = log_message + ' (' + progressObj.transferred + '/' + progressObj.total + ')';
+  log.info('[Main Process] ' + log_message);
+  // We could send progress to renderer if we want a progress bar in the custom UI
+  // if (mainWindow) mainWindow.webContents.send('update-download-progress', progressObj.percent);
+});
+
+autoUpdater.on('update-downloaded', (info) => {
+  log.info('[Main Process] Update downloaded.', info);
+  if (mainWindow) {
+    mainWindow.webContents.send('update-downloaded', info.version);
+  }
+  // The renderer will now handle the prompt and call 'quit-and-install-update'
+});
+
+// Listen for the renderer to tell us to quit and install
+ipcMain.on('quit-and-install-update', () => {
+  log.info('[Main Process] Received quit-and-install-update from renderer.');
+  autoUpdater.quitAndInstall();
+});
+// --- End Auto Updater Events ---
+
+let PROJECTS_FILE;
+if (app.isPackaged) {
+  PROJECTS_FILE = path.join(process.resourcesPath, 'projects.json');
+} else {
+  PROJECTS_FILE = path.resolve(APP_ROOT, 'projects.json');
+}
 
 function getProjectsMetadata() {
   if (!fs.existsSync(PROJECTS_FILE)) return [];
@@ -190,6 +262,79 @@ function saveProjectsMetadata(projectsMetadata) {
   }
 }
 
+// Function to determine the correct arduino-cli executable name based on platform and architecture
+function getArduinoCliExecutableName(platform, arch) {
+  if (platform === 'win32') {
+    return 'arduino-cli.exe'; // Windows usually has one binary, often x64 compatible
+  } else if (platform === 'darwin') { // macOS
+    if (arch === 'arm64') {
+      return 'arduino-cli-arm64';
+    } else if (arch === 'x64') {
+      return 'arduino-cli-x64';
+    } else {
+      console.warn(`[getBundledArduinoCliPath] Unsupported macOS architecture: ${arch}. Falling back to generic 'arduino-cli'. This might fail.`);
+      return 'arduino-cli'; // Fallback, might not be present or correct
+    }
+  } else if (platform === 'linux') {
+    if (arch === 'arm64') {
+      return 'arduino-cli-arm64';
+    } else if (arch === 'x64') {
+      return 'arduino-cli-x64';
+    } else {
+      console.warn(`[getBundledArduinoCliPath] Unsupported Linux architecture: ${arch}. Falling back to generic 'arduino-cli'. This might fail.`);
+      return 'arduino-cli'; // Fallback
+    }
+  }
+  console.error(`[getBundledArduinoCliPath] Unsupported platform: ${platform}.`);
+  return 'arduino-cli'; // Should ideally throw an error or handle more gracefully
+}
+
+// Helper function to get the path to the bundled arduino-cli resources
+function getBundledArduinoCliPath() {
+  const platform = process.platform;
+  const arch = process.arch; // Get the runtime architecture
+  const executableName = getArduinoCliExecutableName(platform, arch);
+
+  const platformDir = platform === 'win32' ? 'win' : (platform === 'darwin' ? 'mac' : 'linux');
+
+  if (app.isPackaged) {
+    return path.join(process.resourcesPath, 'arduino-cli', 'bin', platformDir, executableName);
+  } else {
+    // Development path from project root (__dirname)
+    return path.resolve(__dirname, 'resources', 'arduino-cli', 'bin', platformDir, executableName);
+  }
+}
+
+function getArduinoCliDataDir() {
+  if (app.isPackaged) {
+    return path.join(process.resourcesPath, 'arduino-cli', 'data');
+  } else {
+    // Development path: resources/arduino-cli/data
+    return path.resolve(__dirname, 'resources', 'arduino-cli', 'data');
+  }
+}
+
+function getArduinoCliConfigFile() {
+  // The config file is within the data directory
+  return path.join(getArduinoCliDataDir(), 'arduino-cli.yaml');
+}
+
+const arduinoCliPath = getBundledArduinoCliPath();
+const arduinoDataDir = getArduinoCliDataDir();
+const arduinoConfigFile = getArduinoCliConfigFile();
+
+console.log(`Using arduino-cli: ${arduinoCliPath}`);
+console.log(`Using arduino-cli data dir: ${arduinoDataDir}`);
+console.log(`Using arduino-cli config file: ${arduinoConfigFile}`);
+
+// Sanity check (optional, but good for debugging)
+if (!fs.existsSync(arduinoCliPath)) {
+  console.error(`ERROR: Bundled arduino-cli not found at ${arduinoCliPath}. Please ensure it is downloaded and placed correctly, then run 'npm run prepare-arduino'.`);
+}
+if (!fs.existsSync(arduinoConfigFile)) {
+  console.error(`ERROR: Bundled arduino-cli config not found at ${arduinoConfigFile}. Make sure it was created by the setup.`);
+}
+
 ipcMain.handle('compile-sketch', async (event, baseFqbn, options, sketchPath) => { // Added options, adjusted order
   console.log('[compile-sketch] Handler called with:', { baseFqbn, options, sketchPath });
   
@@ -204,7 +349,7 @@ ipcMain.handle('compile-sketch', async (event, baseFqbn, options, sketchPath) =>
 
   return new Promise((resolve) => {
     // Use the full FQBN in the command
-    const command = `arduino-cli compile --fqbn ${fullFqbn} "${sketchPath}" --format json`;
+    const command = `"${arduinoCliPath}" compile --fqbn ${fullFqbn} "${sketchPath}" --format json --config-file "${arduinoConfigFile}" --config-dir "${arduinoDataDir}"`; // Changed to --config-dir
     console.log(`[compile-sketch] Executing command: ${command}`);
     
     exec(command, (error, stdout, stderr) => {
@@ -237,19 +382,24 @@ ipcMain.handle('upload-sketch', async (event, baseFqbn, options, port, sketchPat
   }
 
   return new Promise((resolve) => {
-    // Use the full FQBN in the command
-    const command = `arduino-cli upload -p ${port} --fqbn ${fullFqbn} "${sketchPath}" --format json`;
-     console.log(`[upload-sketch] Executing command: ${command}`);
+    const command = `"${arduinoCliPath}" upload -p "${port}" --fqbn ${fullFqbn} "${sketchPath}" --verbose --config-file "${arduinoConfigFile}" --config-dir "${arduinoDataDir}"`;
+    console.log(`[upload-sketch] Executing command: ${command}`);
      
     exec(command, (error, stdout, stderr) => {
-      if (error) {
-        console.error('[upload-sketch] Error:', stderr || error);
-        resolve({ success: false, error: stderr || error.message, output: stdout }); // Include stdout on error
+      if (error) { // arduino-cli command itself failed (e.g., non-zero exit code)
+        console.error('[upload-sketch] CLI Error:', error);
+        console.error('[upload-sketch] CLI Stderr:', stderr);
+        console.error('[upload-sketch] CLI Stdout:', stdout);
+        // Prioritize stderr for error message, then error.message, then stdout if others are empty
+        let errorMessage = stderr || error.message || stdout || 'Unknown upload error';
+        resolve({ success: false, error: errorMessage, output: stdout }); 
         return;
       }
-       console.log('[upload-sketch] Success stdout:', stdout);
-       if (stderr) console.warn('[upload-sketch] Success stderr:', stderr);
-      resolve({ success: true, output: stdout, error: stderr }); // Include stderr even on success
+      // arduino-cli command succeeded. For verbose upload, avrdude's output is typically in stderr.
+      console.log('[upload-sketch] CLI Success.');
+      console.log('[upload-sketch] CLI Stdout (avrdude command):', stdout); 
+      console.log('[upload-sketch] CLI Stderr (avrdude log):', stderr);
+      resolve({ success: true, output: stderr, details: stdout }); // Main output is avrdude log (stderr), details is avrdude command (stdout)
     });
   });
 });
@@ -371,7 +521,7 @@ ipcMain.handle('force-refresh-file', async (event, filePath) => {
 ipcMain.handle('list-boards', async () => {
   console.log('list-boards handler called');
   return new Promise((resolve) => {
-    const command = 'arduino-cli board list --format json';
+    const command = `"${arduinoCliPath}" board list --format json --config-file "${arduinoConfigFile}" --config-dir "${arduinoDataDir}"`; // Changed to --config-dir
     exec(command, (error, stdout, stderr) => {
       if (error) {
         console.error('arduino-cli error:', stderr || error.message);
@@ -403,8 +553,8 @@ ipcMain.handle('list-boards', async () => {
 
 ipcMain.handle('list-all-boards', async () => {
   return new Promise((resolve) => {
-    const command = 'arduino-cli board listall --format json';
-    const child = spawn(command.split(' ')[0], command.split(' ').slice(1));
+    const cliArgs = ['board', 'listall', '--format', 'json', '--config-file', arduinoConfigFile, '--config-dir', arduinoDataDir]; // Already changed, confirming consistency
+    const child = spawn(arduinoCliPath, cliArgs);
     let stdout = '';
     let stderr = '';
 
@@ -463,7 +613,7 @@ ipcMain.handle('list-all-boards', async () => {
 
 ipcMain.handle('lib-search', async (event, query) => {
   return new Promise((resolve) => {
-    const command = `arduino-cli lib search ${query} --format json`;
+    const command = `"${arduinoCliPath}" lib search "${query}" --format json --config-file "${arduinoConfigFile}" --config-dir "${arduinoDataDir}"`; // Changed to --config-dir
     exec(command, { maxBuffer: 1024 * 1024 * 10 }, (error, stdout, stderr) => {
       if (error) {
         resolve({ success: false, error: stderr || error.message });
@@ -491,9 +641,8 @@ ipcMain.handle('lib-install', async (event, name, version) => {
       console.log(`[lib-install] Installing latest version of: ${libArg}`);
     }
 
-    // Quote the library argument to handle names with spaces
     const quotedLibArg = `"${libArg}"`;
-    const command = `arduino-cli lib install ${quotedLibArg}`;
+    const command = `"${arduinoCliPath}" lib install ${quotedLibArg} --config-file "${arduinoConfigFile}" --config-dir "${arduinoDataDir}"`; // Changed to --config-dir
 
     console.log(`[lib-install] Executing command: ${command}`);
     const childProcess = exec(command, (error, stdout, stderr) => {
@@ -507,7 +656,8 @@ ipcMain.handle('lib-install', async (event, name, version) => {
       if (stderr) console.warn('[lib-install] stderr (non-fatal):', stderr);
       
       // Verify installation by checking if library exists
-      exec('arduino-cli lib list --format json', (verifyError, verifyStdout) => {
+      const verifyCommand = `"${arduinoCliPath}" lib list --format json --config-file "${arduinoConfigFile}" --config-dir "${arduinoDataDir}"`; // Changed to --config-dir
+      exec(verifyCommand, (verifyError, verifyStdout) => {
         if (verifyError) {
           console.error('[lib-install] Verification error:', verifyError);
           resolve({ success: false, error: 'Failed to verify installation' });
@@ -561,7 +711,7 @@ ipcMain.handle('lib-install', async (event, name, version) => {
 
 ipcMain.handle('lib-uninstall', async (event, name) => {
   return new Promise((resolve) => {
-    const command = `arduino-cli lib uninstall ${name}`;
+    const command = `"${arduinoCliPath}" lib uninstall "${name}" --config-file "${arduinoConfigFile}" --config-dir "${arduinoDataDir}"`; // Changed to --config-dir
     exec(command, (error, stdout, stderr) => {
       if (error) {
         resolve({ success: false, error: stderr || error.message });
@@ -574,7 +724,7 @@ ipcMain.handle('lib-uninstall', async (event, name) => {
 
 ipcMain.handle('lib-list', async () => {
   return new Promise((resolve) => {
-    const command = 'arduino-cli lib list --format json';
+    const command = `"${arduinoCliPath}" lib list --format json --config-file "${arduinoConfigFile}" --config-dir "${arduinoDataDir}"`; // Changed to --config-dir
     exec(command, (error, stdout, stderr) => {
       if (error) {
         resolve({ success: false, error: stderr || error.message });
@@ -592,7 +742,7 @@ ipcMain.handle('lib-list', async () => {
 
 ipcMain.handle('lib-update-index', async () => {
   return new Promise((resolve) => {
-    const command = 'arduino-cli lib update-index';
+    const command = `"${arduinoCliPath}" lib update-index --config-file "${arduinoConfigFile}" --config-dir "${arduinoDataDir}"`; // Changed to --config-dir
     exec(command, (error, stdout, stderr) => {
       if (error) {
         resolve({ success: false, error: stderr || error.message });
@@ -602,6 +752,153 @@ ipcMain.handle('lib-update-index', async () => {
     });
   });
 });
+
+// === Arduino Core Management Handlers ===
+
+ipcMain.handle('core-update-index', async () => {
+  return new Promise((resolve) => {
+    const command = `"${arduinoCliPath}" core update-index --format json --config-file "${arduinoConfigFile}" --config-dir "${arduinoDataDir}"`;
+    exec(command, (error, stdout, stderr) => {
+      if (error) {
+        resolve({ success: false, error: stderr || error.message });
+        return;
+      }
+      resolve({ success: true, output: stdout });
+    });
+  });
+});
+
+ipcMain.handle('core-list', async () => {
+  return new Promise((resolve) => {
+    const command = `"${arduinoCliPath}" core list --format json --config-file "${arduinoConfigFile}" --config-dir "${arduinoDataDir}"`;
+    exec(command, (error, stdout, stderr) => {
+      if (error) {
+        resolve({ success: false, error: stderr || error.message });
+        return;
+      }
+      try {
+        const data = JSON.parse(stdout);
+        resolve({ success: true, platforms: data.platforms || [] });
+      } catch (e) {
+        resolve({ success: false, error: 'Failed to parse core list output.' });
+      }
+    });
+  });
+});
+
+ipcMain.handle('core-search', async (event, query) => {
+  return new Promise((resolve) => {
+    const command = `"${arduinoCliPath}" core search "${query}" --format json --config-file "${arduinoConfigFile}" --config-dir "${arduinoDataDir}"`;
+    exec(command, { maxBuffer: 1024 * 1024 * 10 }, (error, stdout, stderr) => {
+      if (error) {
+        resolve({ success: false, error: stderr || error.message });
+        return;
+      }
+      try {
+        const data = JSON.parse(stdout);
+        resolve({ success: true, results: data.platforms || [] });
+      } catch (e) {
+        resolve({ success: false, error: 'Failed to parse search output.' });
+      }
+    });
+  });
+});
+
+ipcMain.handle('core-install', async (event, platformPackage) => {
+  console.log(`[core-install] Installing core: ${platformPackage}`);
+  
+  return new Promise((resolve) => {
+    const quotedPackageName = `"${platformPackage}"`;
+    const command = `"${arduinoCliPath}" core install ${quotedPackageName} --format json --config-file "${arduinoConfigFile}" --config-dir "${arduinoDataDir}"`;
+    
+    console.log(`[core-install] Executing command: ${command}`);
+    const childProcess = exec(command, { maxBuffer: 1024 * 1024 * 10 }, (error, stdout, stderr) => {
+      if (error) {
+        console.error('[core-install] Installation error:', error);
+        console.error('[core-install] stderr:', stderr);
+        resolve({ success: false, error: stderr || error.message, output: stdout });
+        return;
+      }
+      
+      console.log('[core-install] stdout:', stdout);
+      if (stderr) console.warn('[core-install] stderr (non-fatal):', stderr);
+      
+      try {
+        let resultData = {};
+        if (stdout.trim()) {
+          resultData = JSON.parse(stdout);
+        }
+        resolve({ success: true, output: resultData });
+      } catch (parseErr) {
+        console.warn('[core-install] Failed to parse output as JSON:', parseErr);
+        resolve({ success: true, output: stdout }); // Still consider it a success but return raw output
+      }
+    });
+
+    // Log real-time output
+    childProcess.stdout.on('data', (data) => {
+      console.log(`[core-install] Real-time stdout: ${data}`);
+      // We could potentially send progress updates to the renderer here
+      if (mainWindow) {
+        mainWindow.webContents.send('core-install-progress', { type: 'stdout', data: data.toString() });
+      }
+    });
+
+    childProcess.stderr.on('data', (data) => {
+      console.log(`[core-install] Real-time stderr: ${data}`);
+      if (mainWindow) {
+        mainWindow.webContents.send('core-install-progress', { type: 'stderr', data: data.toString() });
+      }
+    });
+  });
+});
+
+ipcMain.handle('core-uninstall', async (event, platformPackage) => {
+  return new Promise((resolve) => {
+    const command = `"${arduinoCliPath}" core uninstall "${platformPackage}" --format json --config-file "${arduinoConfigFile}" --config-dir "${arduinoDataDir}"`;
+    exec(command, (error, stdout, stderr) => {
+      if (error) {
+        resolve({ success: false, error: stderr || error.message });
+        return;
+      }
+      try {
+        let resultData = {};
+        if (stdout.trim()) {
+          resultData = JSON.parse(stdout);
+        }
+        resolve({ success: true, output: resultData });
+      } catch (parseErr) {
+        resolve({ success: true, output: stdout }); // Still consider it a success but return raw output
+      }
+    });
+  });
+});
+
+ipcMain.handle('core-upgrade', async (event, platformPackage) => {
+  const upgradeCommand = platformPackage 
+    ? `"${arduinoCliPath}" core upgrade "${platformPackage}" --format json --config-file "${arduinoConfigFile}" --config-dir "${arduinoDataDir}"`
+    : `"${arduinoCliPath}" core upgrade --format json --config-file "${arduinoConfigFile}" --config-dir "${arduinoDataDir}"`; // Upgrade all if no package specified
+  
+  return new Promise((resolve) => {
+    exec(upgradeCommand, { maxBuffer: 1024 * 1024 * 10 }, (error, stdout, stderr) => {
+      if (error) {
+        resolve({ success: false, error: stderr || error.message });
+        return;
+      }
+      try {
+        let resultData = {};
+        if (stdout.trim()) {
+          resultData = JSON.parse(stdout);
+        }
+        resolve({ success: true, output: resultData });
+      } catch (parseErr) {
+        resolve({ success: true, output: stdout }); // Still consider it a success but return raw output
+      }
+    });
+  });
+});
+
+// === End Arduino Core Management Handlers ===
 
 // === Checkpoint Management ===
 
@@ -710,7 +1007,14 @@ if (!saveVersionHandlerRegistered) {
   saveVersionHandlerRegistered = true; // Set flag before registration
   ipcMain.handle('save-version', async (event, filePath) => {
     console.log(`[IPC save-version] Handler called for ${filePath}`);
-    return await performSaveVersionLogic(filePath); // Call the refactored logic
+    const result = await performSaveVersionLogic(filePath); // Call the refactored logic
+    // EMIT project-version-changed event HERE if successful
+    if (result.success && mainWindow && mainWindow.webContents) {
+        const projectDirForEvent = path.dirname(filePath);
+        console.log(`[save-version -> performSaveVersionLogic] Emitting project-version-changed for project: ${projectDirForEvent}`);
+        mainWindow.webContents.send('project-version-changed', projectDirForEvent);
+    }
+    return result;
   });
 }
 
@@ -981,7 +1285,17 @@ ipcMain.handle('serial-send', async (event, data) => {
 // --- End Serial Port Handlers --- 
 
 // === Agent Tools & LangGraph Agent Setup ===
-const agentTools = require('./src/main/agent-tools');
+// const agentTools = require('./src/main/agent-tools');
+
+// Patched require for agent-tools to work in development and packaged app
+let agentTools;
+try {
+  // In packaged app, 'src' might not be part of the path as expected
+  agentTools = require('./agent-tools');
+} catch (e) {
+  // Fallback for development or if './agent-tools' isn't found
+  agentTools = require('./src/main/agent-tools');
+}
 
 // === Custom Streaming Graph Scaffold (for migration) ===
 // Use Zod for state schema
@@ -1169,7 +1483,13 @@ const agentStateSchema = {
 };
 
 // Read system prompt from file
-const systemPrompt = fs.readFileSync(path.join(APP_ROOT, 'systemprompt.md'), 'utf-8');
+// const systemPrompt = fs.readFileSync(path.join(APP_ROOT, 'systemprompt.md'), 'utf-8');
+let systemPrompt;
+if (app.isPackaged) {
+  systemPrompt = fs.readFileSync(path.join(process.resourcesPath, 'systemprompt.md'), 'utf-8');
+} else {
+  systemPrompt = fs.readFileSync(path.join(APP_ROOT, 'systemprompt.md'), 'utf-8');
+}
 
 // === Global AbortController for the current stream ===
 let currentStreamAbortController = null; 
@@ -1179,93 +1499,108 @@ let currentStreamAbortController = null;
 async function getChatModel(provider, modelName, authToken, options = {}) {
   // Get the base URL for the Cloud Function
   const cloudFunctionBaseUrl = isDev 
-    ? `http://localhost:5001/emdedr-822d0/us-central1/llmProxy`
+    ? `http://127.0.0.1:5001/emdedr-822d0/us-central1/llmProxy`
     : `https://us-central1-emdedr-822d0.cloudfunctions.net/llmProxy`;
   
-  console.log(`[DEBUG] getChatModel called with provider: ${provider}, model: ${modelName}`);
-  console.log(`[DEBUG] Using cloud function base URL: ${cloudFunctionBaseUrl}`);
+  console.log(`[getChatModel] Called with provider: ${provider}, model: ${modelName}`);
+  console.log(`[getChatModel] Using cloud function base URL: ${cloudFunctionBaseUrl}`);
   
   if (!authToken) {
-    console.warn('[DEBUG] No auth token provided to getChatModel');
-    throw new Error('Authentication required');
+    console.warn('[getChatModel] No auth token provided.');
+    throw new Error('Authentication required for getChatModel.');
   }
   
-  // Headers with Firebase auth token
   const dynamicHeaders = {
     'Authorization': `Bearer ${authToken}`,
   };
   
-  console.log(`[DEBUG] Creating ${provider} model with auth token (length: ${authToken.length})`);
+  console.log(`[getChatModel] Creating ${provider} model with auth token (length: ${authToken.length})`);
   
-  // Common config for streaming models
-  const commonStreamingConfig = {
-    // temperature: options.temperature || 0.7, // Original line
+  // Base config for all models, including streaming and proxy key
+  const baseModelConfig = {
     maxOutputTokens: options.maxTokens || 2048,
     streaming: true,
-    // Dummy API key - the actual key is secured in the Cloud Function
-    apiKey: "DUMMY_KEY_NOT_USED",
+    apiKey: "DUMMY_KEY_NOT_USED", // Dummy API key for proxied requests
+    maxRetries: 0, // Prevent LLM client from retrying on errors like 429
   };
 
-  // Adjust temperature specifically for o4-mini
+  // Determine temperature based on model and options
+  let temperature;
   if (modelName === 'o4-mini') {
     if (options.temperature !== undefined && options.temperature !== 1 && options.temperature !== 1.0) {
-      console.warn(`[DEBUG] Model 'o4-mini' only supports temperature 1.0. Ignoring provided value: ${options.temperature}`);
+      console.warn(`[getChatModel] Model 'o4-mini' only supports temperature 1.0. Ignoring provided value: ${options.temperature}`);
     }
-    commonStreamingConfig.temperature = 1.0; // Set to the supported value
+    temperature = 1.0;
   } else {
-    commonStreamingConfig.temperature = options.temperature !== undefined ? options.temperature : 0.7;
+    temperature = options.temperature !== undefined ? options.temperature : 0.7;
   }
+
+  // Combine base config with temperature
+  const finalModelConfig = {
+    ...baseModelConfig,
+    temperature,
+  };
   
   let chatModelInstance;
   
   if (provider === 'openai') {
-    console.log(`[DEBUG] Initializing OpenAI model: ${modelName}`);
+    console.log(`[getChatModel] Initializing OpenAI model: ${modelName}`);
     chatModelInstance = new ChatOpenAI({
-      ...commonStreamingConfig,
-      modelName: modelName || 'gpt-4.1',
+      ...finalModelConfig,
+      modelName: modelName || 'gpt-4.1', // Default OpenAI model
       configuration: {
-        // IMPORTANT: Include /v1 in the path for OpenAI
         baseURL: `${cloudFunctionBaseUrl}/openai/v1`,
         defaultHeaders: dynamicHeaders,
       },
     });
-    console.log('[DEBUG] ChatOpenAI instance created with proxy configuration');
+    console.log('[getChatModel] ChatOpenAI instance created for OpenAI provider via proxy.');
   } else if (provider === 'anthropic') {
-    console.log(`[DEBUG] Initializing Anthropic model: ${modelName}`);
+    console.log(`[getChatModel] Initializing Anthropic model: ${modelName}`);
     chatModelInstance = new ChatAnthropic({
-      ...commonStreamingConfig,
-      modelName: modelName || 'claude-3-7-sonnet-latest',
-      clientOptions: {
+      ...finalModelConfig,
+      modelName: modelName || 'claude-3-7-sonnet-latest', // Default Anthropic model
+      clientOptions: { // For Anthropic, proxy config is under clientOptions
         baseURL: `${cloudFunctionBaseUrl}/anthropic`,
         defaultHeaders: dynamicHeaders,
       },
     });
-    console.log('[DEBUG] ChatAnthropic instance created with proxy configuration');
+    console.log('[getChatModel] ChatAnthropic instance created for Anthropic provider via proxy.');
   } else if (provider === 'google') {
-    console.log(`[DEBUG] Initializing Google model: ${modelName}`);
-    chatModelInstance = new ChatGoogleGenerativeAI({
-      ...commonStreamingConfig,
-      apiKey: process.env.GOOGLE_API_KEY, // Use actual key from main.js env for Google proxy
-      model: modelName || 'gemini-2.5-pro-exp-03-25',
+    console.log(`[getChatModel] Initializing Google Gemini model (${modelName}) via ChatOpenAI to proxy's OpenAI endpoint.`);
+    chatModelInstance = new ChatOpenAI({ // Using ChatOpenAI for Gemini via our proxy's OpenAI endpoint
+      ...finalModelConfig,
+      modelName: modelName || 'gemini-1.5-pro-latest', // Pass the actual Gemini model name
       configuration: {
-        baseURL: `${cloudFunctionBaseUrl}/google`,
+        baseURL: `${cloudFunctionBaseUrl}/openai/v1`, // Point to the OpenAI path in our proxy
         defaultHeaders: dynamicHeaders,
       },
     });
-    console.log('[DEBUG] ChatGoogleGenerativeAI instance created with proxy configuration (using main.js GOOGLE_API_KEY)');
+    console.log('[getChatModel] ChatOpenAI instance created for Google Gemini provider via proxy\'s OpenAI endpoint.');
+  } else if (modelName === 'gemini-2.5-flash-preview-05-20') {
+    // Handle Gemini Flash model specifically (without requiring 'google' provider)
+    console.log(`[getChatModel] Initializing Gemini 2.5 Flash model via ChatOpenAI to proxy's OpenAI endpoint.`);
+    chatModelInstance = new ChatOpenAI({
+      ...finalModelConfig,
+      modelName: 'gemini-2.5-flash-preview-05-20',
+      configuration: {
+        baseURL: `${cloudFunctionBaseUrl}/openai/v1`, // Point to the OpenAI path in our proxy
+        defaultHeaders: dynamicHeaders,
+      },
+    });
+    console.log('[getChatModel] ChatOpenAI instance created for Gemini 2.5 Flash via proxy\'s OpenAI endpoint.');
   } else if (provider === 'groq') {
-    console.log(`[DEBUG] Initializing Groq model: ${modelName}`);
+    console.log(`[getChatModel] Initializing Groq model: ${modelName}`);
     chatModelInstance = new ChatOpenAI({ // Groq uses OpenAI compatible API
-      ...commonStreamingConfig,
-      modelName: modelName || 'llama3-70b-8192',
+      ...finalModelConfig,
+      modelName: modelName || 'llama3-70b-8192', // Default Groq model
       configuration: {
         baseURL: `${cloudFunctionBaseUrl}/groq`,
         defaultHeaders: dynamicHeaders,
       },
     });
-    console.log('[DEBUG] ChatOpenAI instance created for Groq provider with proxy configuration');
+    console.log('[getChatModel] ChatOpenAI instance created for Groq provider via proxy.');
   } else {
-    console.error(`[DEBUG] Unsupported provider: ${provider}`);
+    console.error(`[getChatModel] Unsupported provider: ${provider}`);
     throw new Error(`Unsupported provider: ${provider}`);
   }
   
@@ -1623,6 +1958,10 @@ ipcMain.on('copilot-chat-message-stream', async (event, userInput, threadId, pro
   // Store initial selections from UI if needed, or rely on set-selected-* handlers having been called
   if (selectedBoardFqbn && !currentSelectedBoardFqbn) currentSelectedBoardFqbn = selectedBoardFqbn;
   if (selectedPortPath && !currentSelectedPortPath) currentSelectedPortPath = selectedPortPath;
+
+  // Ensure currentSelectedBoardFqbn and currentSelectedPortPath are updated with values for THIS call
+  currentSelectedBoardFqbn = selectedBoardFqbn;
+  currentSelectedPortPath = selectedPortPath;
 
   console.log('[copilot-chat-message-stream] Handler called');
   // Log current state *before* preparing context
@@ -2030,14 +2369,14 @@ ipcMain.on('copilot-chat-message-stream', async (event, userInput, threadId, pro
         error: err.message || String(err) 
       });
       
-      // Add error representation to current run messages
-      currentRunMessages.push({ role: 'assistant', content: `Error: ${err.message || String(err)}` }); 
+      // DO NOT add error representation to current run messages
+      // currentRunMessages.push({ role: 'assistant', content: `Error: ${err.message || String(err)}` }); 
       
-      // *** Combine FULL initial history for saving in catch block ***
+      // *** Combine FULL initial history with messages accumulated BEFORE the error for saving ***
       const finalMessagesToSave = [...initialFullMessages, ...currentRunMessages];
       console.log(`[SaveHistory Debug - Error Catch] finalMessagesToSave (${finalMessagesToSave.length} items):`, JSON.stringify(finalMessagesToSave, null, 2));
       saveChatHistory(projectPath, threadId, finalMessagesToSave);
-      console.log('  Saved chat history including error message.');
+      console.log('  Saved chat history up to the point of error (excluding the error message itself).');
     }
   } finally {
     // Always clear the controller when the stream handler finishes
@@ -2088,19 +2427,15 @@ ipcMain.handle('set-window-title', async (event, title) => {
 
 // New IPC Handler: Get available configuration options for a board
 ipcMain.handle('get-board-options', async (event, baseFqbn) => {
-  //console.log(`[IPC Handler] get-board-options called for FQBN: ${baseFqbn}`);
   if (!baseFqbn) {
     return { success: false, error: 'Base FQBN is required.' };
   }
 
   return new Promise((resolve) => {
-    // Use JSON format
-    const command = `arduino-cli board details --fqbn ${baseFqbn} --format json`; 
-    //console.log(`[get-board-options] Executing: ${command}`);
+    const command = `"${arduinoCliPath}" board details --fqbn "${baseFqbn}" --format json --config-file "${arduinoConfigFile}" --config-dir "${arduinoDataDir}"`;  // Changed to --config-dir
 
     exec(command, (error, stdout, stderr) => {
       if (error) {
-        //console.error(`[get-board-options] Error executing command for ${baseFqbn}:`, stderr || error);
         resolve({ success: false, error: `Failed to get board details: ${stderr || error.message}` });
         return;
       }
@@ -2110,8 +2445,6 @@ ipcMain.handle('get-board-options', async (event, baseFqbn) => {
         const optionsResult = {};
 
         if (details.config_options && Array.isArray(details.config_options)) {
-          //console.log('[get-board-options] Found config_options array in JSON.');
-          
           for (const configOption of details.config_options) {
             const key = configOption.option;
             const values = configOption.values || [];
@@ -2122,17 +2455,13 @@ ipcMain.handle('get-board-options', async (event, baseFqbn) => {
                 label: v.value_label // Use value_label from JSON
                 // We could also add v.selected here if needed for default selection logic
               }));
-               //console.log(`[get-board-options] Parsed options for key '${key}':`, optionsResult[key]);
             }
           }
         } else {
-          //console.log(`[get-board-options] No 'config_options' array found in JSON for ${baseFqbn}.`);
         }
 
-        //console.log(`[get-board-options] Parsed final options for ${baseFqbn}:`, optionsResult);
         resolve({ success: true, options: optionsResult });
       } catch (parseError) {
-        //console.error(`[get-board-options] Error parsing board details JSON for ${baseFqbn}:`, parseError);
         resolve({ success: false, error: 'Failed to parse board details JSON.' });
       }
     });
@@ -2254,5 +2583,210 @@ ipcMain.handle('set-firebase-auth-token', async (event, token, expiryTime) => {
   } catch (error) {
     console.error('[IPC] Error in set-firebase-auth-token:', error);
     return { success: false, error: error.message || 'Unknown error' };
+  }
+});
+
+// === MonacoPilot Completion IPC Handler (NEW) ===
+ipcMain.handle('invoke-monacopilot-completion', async (event, body) => {
+  console.log('[IPC Handler] invoke-monacopilot-completion called with body:', body);
+
+  let authToken = cachedAuthToken;
+  const functionName = 'invoke-monacopilot-completion'; // For logging
+
+  if (!authToken || (tokenExpiryTime && Date.now() >= tokenExpiryTime)) {
+    console.warn(`[${functionName}] No valid cached auth token, requesting from renderer...`);
+    if (mainWindow && mainWindow.webContents) {
+      mainWindow.webContents.send('request-auth-token');
+      let attempts = 0;
+      const maxAttempts = 20; // Wait for 10 seconds (20 * 500ms)
+      while ((!cachedAuthToken || (tokenExpiryTime && Date.now() >= tokenExpiryTime)) && attempts < maxAttempts) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+        authToken = cachedAuthToken;
+        attempts++;
+      }
+
+      if (!authToken || (tokenExpiryTime && Date.now() >= tokenExpiryTime)) {
+        console.error(`[${functionName}] Failed to get auth token after waiting.`);
+        return { completion: null, error: 'Authentication timed out. Please sign in again and retry.' };
+      }
+      console.log(`[${functionName}] Auth token obtained after request.`);
+    } else {
+      console.error(`[${functionName}] Main window not available to request token.`);
+      return { completion: null, error: 'Internal error: Cannot request auth token.' };
+    }
+  } else {
+    console.log(`[${functionName}] Using cached auth token.`);
+  }
+
+  const monacopilotProxyUrl = isDev
+    ? `http://127.0.0.1:5001/emdedr-822d0/us-central1/monacopilotProxy`
+    : `https://us-central1-emdedr-822d0.cloudfunctions.net/monacopilotProxy`;
+
+  console.log(`[${functionName}] Sending request to: ${monacopilotProxyUrl}`);
+
+  try {
+    const response = await fetch(monacopilotProxyUrl, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${authToken}`,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify(body), // body is the payload from monacopilot client
+    });
+
+    if (!response.ok) {
+      let errorPayload = { error: `API Error (${response.status})` };
+      try {
+        const errorData = await response.json();
+        errorPayload = { error: errorData.error || JSON.stringify(errorData) };
+      } catch (e) {
+        const errorText = await response.text();
+        errorPayload = { error: errorText || `API Error (${response.status})` };
+      }
+      console.error(`[${functionName}] Error from monacopilotProxy:`, errorPayload.error);
+      return { completion: null, ...errorPayload };
+    }
+
+    const data = await response.json(); // Expected: { completion: "...", error?: "..." }
+    console.log(`[${functionName}] Response from monacopilotProxy:`, data);
+    return data; // Return the structured response { completion, error? }
+
+  } catch (error) {
+    console.error(`[${functionName}] Fetch error:`, error);
+    return { completion: null, error: error.message || 'Network error or failed to fetch from completion proxy.' };
+  }
+});
+// === END MonacoPilot Completion IPC Handler ===
+
+// === NEW IPC Handler for Get Latest Checkpoint Path ===
+ipcMain.handle('get-latest-checkpoint-path', async (event, projectPath) => {
+  console.log(`[IPC get-latest-checkpoint-path] Called for project: ${projectPath}`);
+  if (!projectPath) {
+    return { success: false, error: 'Project path is required.' };
+  }
+
+  const mainInoPath = getMainInoPath(projectPath);
+  if (!mainInoPath) {
+    return { success: false, error: 'Could not determine main .ino file for project.' };
+  }
+
+  // Utilize existing list-versions logic to get sorted versions
+  // This is a simplified approach. For performance, you might directly read/parse index.json
+  // and get the first entry if confident about sorting, but reusing list-versions is safer for consistency.
+  return new Promise((resolve) => {
+    try {
+      const versDir = path.join(projectPath, '.versions'); // Adjusted to use projectPath directly for .versions
+      const indexPath = path.join(versDir, 'index.json');
+
+      if (!fs.existsSync(versDir) || !fs.existsSync(indexPath)) {
+        console.log(`[IPC get-latest-checkpoint-path] No versions directory or index found for ${projectPath}`);
+        resolve({ success: true, latestCheckpointPath: null }); // No versions means no latest path
+        return;
+      }
+
+      let versions = [];
+      try {
+        versions = JSON.parse(fs.readFileSync(indexPath, 'utf-8'));
+        if (!Array.isArray(versions)) versions = [];
+      } catch (e) {
+        console.error('[IPC get-latest-checkpoint-path] Error reading or parsing index.json:', e);
+        resolve({ success: false, error: 'Corrupted version index.' });
+        return;
+      }
+
+      if (versions.length === 0) {
+        resolve({ success: true, latestCheckpointPath: null });
+        return;
+      }
+
+      // Assuming versions are sorted by `performSaveVersionLogic` and `list-versions` (newest first)
+      // or explicitly sort here if necessary (e.g., by version number or timestamp)
+      versions.sort((a, b) => (b.version || 0) - (a.version || 0)); // Ensure sort by version desc
+
+      const latestVersion = versions[0];
+      if (latestVersion && latestVersion.path) {
+        console.log(`[IPC get-latest-checkpoint-path] Latest version path for ${projectPath}: ${latestVersion.path}`);
+        resolve({ success: true, latestCheckpointPath: latestVersion.path });
+      } else {
+        resolve({ success: true, latestCheckpointPath: null }); // No valid latest version entry
+      }
+    } catch (e) {
+      console.error('[IPC get-latest-checkpoint-path] Error:', e);
+      resolve({ success: false, error: e.message });
+    }
+  });
+});
+// === END NEW IPC Handler ===
+
+// === IPC Handler for invoking Firebase Functions (NEW) ===
+ipcMain.handle('invoke-firebase-function', async (event, functionName, payload) => {
+  console.log(`[IPC Handler] invoke-firebase-function: ${functionName} called with payload:`, payload);
+
+  let authToken = cachedAuthToken;
+  const isEmulator = process.env.FIREBASE_EMULATOR_HOST === 'localhost:5001';
+  const baseUrl = isEmulator
+    ? `http://localhost:5001/emdedr-822d0/us-central1`
+    : `https://us-central1-emdedr-822d0.cloudfunctions.net`;
+  const functionUrl = `${baseUrl}/${functionName}`;
+
+  if (!authToken || (tokenExpiryTime && Date.now() >= tokenExpiryTime)) {
+    console.warn(`[invoke-firebase-function:${functionName}] No valid cached auth token, requesting from renderer...`);
+    if (mainWindow && mainWindow.webContents) {
+      mainWindow.webContents.send('request-auth-token');
+      let attempts = 0;
+      const maxAttempts = 20; // Wait for 10 seconds (20 * 500ms)
+      while ((!cachedAuthToken || (tokenExpiryTime && Date.now() >= tokenExpiryTime)) && attempts < maxAttempts) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+        authToken = cachedAuthToken;
+        attempts++;
+      }
+      if (!authToken || (tokenExpiryTime && Date.now() >= tokenExpiryTime)) {
+        console.error(`[invoke-firebase-function:${functionName}] Failed to get auth token after waiting.`);
+        return { success: false, error: 'Authentication timed out. Please sign in again and retry.', data: null };
+      }
+      console.log(`[invoke-firebase-function:${functionName}] Auth token obtained after request.`);
+    } else {
+      console.error(`[invoke-firebase-function:${functionName}] Main window not available to request token.`);
+      return { success: false, error: 'Internal error: Cannot request auth token.', data: null };
+    }
+  } else {
+    console.log(`[invoke-firebase-function:${functionName}] Using cached auth token.`);
+  }
+
+  console.log(`[invoke-firebase-function:${functionName}] Sending POST request to: ${functionUrl}`);
+  try {
+    const response = await fetch(functionUrl, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${authToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload || {}),
+    });
+
+    const responseData = await response.json();
+
+    if (!response.ok) {
+      console.error(`[invoke-firebase-function:${functionName}] Firebase function returned error (${response.status}):`, responseData);
+      return { success: false, error: responseData.error || `Function call failed with status ${response.status}`, data: responseData };
+    }
+    console.log(`[invoke-firebase-function:${functionName}] Firebase function call successful.`);
+    return { success: true, data: responseData };
+  } catch (error) {
+    console.error(`[invoke-firebase-function:${functionName}] Error calling Firebase function:`, error);
+    return { success: false, error: error.message || 'Network error or failed to call function.', data: null };
+  }
+});
+
+// === IPC Handler for opening external URLs (NEW) ===
+ipcMain.handle('open-external-url', async (event, url) => {
+  console.log(`[IPC Handler] open-external-url called with URL: ${url}`);
+  try {
+    await shell.openExternal(url);
+    return { success: true };
+  } catch (error) {
+    console.error(`[IPC Handler] Error opening external URL:`, error);
+    return { success: false, error: error.message || 'Failed to open external URL.' };
   }
 });

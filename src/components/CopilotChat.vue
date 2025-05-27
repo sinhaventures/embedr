@@ -77,8 +77,8 @@
         <!-- Message content -->
         <div v-if="message.role === 'user' || message.role === 'assistant'" class="flex-1">
           <div 
-            class="rounded-lg p-4 text-sm prose-invert max-w-none text-left relative group"
-            :class="message.role === 'user' ? 'bg-gray-900/70' : ''"
+            class="rounded-lg p-4 text-xs prose-invert max-w-none text-left relative group"
+            :class="message.role === 'user' ? 'bg-gray-900/40 border border-gray-100/10 shadow-lg' : ''"
           >
             <!-- Image Thumbnail (if applicable) -->
             <div 
@@ -123,12 +123,13 @@
           </div>
 
           <!-- Checkpoint button for user messages -->
-          <div v-if="message.role === 'user' && message.checkpointPath" class="flex justify-end mt-2">
+          <div v-if="message.role === 'user' && message.checkpointPath && message.checkpointPath !== latestProjectCheckpointPath" class="flex justify-end mt-2">
             <Button
               @click="handleRestoreCheckpoint(message.checkpointPath)"
               variant="ghost"
               size="xs"
               class="text-xs text-muted-foreground hover:text-foreground hover:bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity"
+              :title="`This message was sent when the project version was ${message.checkpointPath.substring(message.checkpointPath.lastIndexOf('/') + 1)}. Current latest is ${latestProjectCheckpointPath ? latestProjectCheckpointPath.substring(latestProjectCheckpointPath.lastIndexOf('/') + 1) : 'N/A'}. Click to restore to this message's version.`"
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="6" height="6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-1"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></svg>
               Restore checkpoint
@@ -157,9 +158,73 @@
     </div>
 
     <!-- Chat Error Display -->
-    <div v-if="chatError" class="px-4 pb-2">
-      <div class="rounded-md bg-destructive/15 p-3 text-xs text-destructive">
-        {{ chatError }}
+    <div v-if="chatError" class="px-4 pt-2">
+      <div class="rounded-lg border border-red-500/50 bg-red-900/20 p-4 text-sm text-white relative overflow-hidden shadow-lg text-left">
+        <!-- Error Icon -->
+        <div class="absolute left-4 top-4">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-red-400">
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="12" y1="8" x2="12" y2="12"/>
+            <line x1="12" y1="16" x2="12.01" y2="16"/>
+          </svg>
+        </div>
+        
+        <!-- Error Content with padding for icon -->
+        <div class="pl-8">
+          <h3 class="text-sm font-medium text-red-400 text-left">Error</h3>
+          
+          <!-- Special handling for rate limit errors -->
+          <div v-if="(chatError.includes('429') || chatError.includes('Too Many Requests') || chatError.includes('monthly limit reached')) && !isProUser" class="mt-2 text-left">
+            <p class="font-semibold">Free Tier Monthly Limit Reached</p>
+            <p class="mt-1 text-gray-300">You've reached your monthly request limit on the free plan.</p>
+            
+            <div class="mt-3 text-xs text-gray-300">
+              <p>Options:</p>
+              <ul class="list-disc ml-5 mt-1 space-y-1">
+                <li>Wait until your limit resets next month.</li>
+                <li>Upgrade to Pro for significantly higher limits and more features.</li>
+              </ul>
+            </div>
+            <div class="mt-4 flex gap-2">
+              <Button
+                @click="authRedirect.redirectToSubscriptionPortal"
+                variant="default"
+                size="sm"
+                :disabled="authRedirect.isLoading.value"
+                class="bg-white/20 hover:bg-white/30 text-white"
+              >
+                <span v-if="authRedirect.isLoading.value" class="animate-spin mr-2 w-4 h-4 inline-block border-2 border-t-transparent border-white rounded-full"></span>
+                Upgrade to Pro
+              </Button>
+            </div>
+          </div>
+          <div v-else-if="(chatError.includes('429') || chatError.includes('Too Many Requests') || chatError.includes('monthly limit reached')) && isProUser" class="mt-2 text-left">
+            <p class="font-semibold">Pro Tier Monthly Limit Reached</p>
+            <p class="mt-1 text-gray-300">You've reached your monthly request limit on the Pro plan.</p>
+            <div class="mt-3 text-xs text-gray-300">
+              <p>Your limit will reset next month. If you consistently require more, please contact support to discuss higher tier options.</p>
+            </div>
+          </div>
+          <!-- NEW: Handling for chat context too long -->
+          <div v-else-if="chatError.includes('CHAT_CONTEXT_TOO_LONG') || chatError.includes('413')" class="mt-2 text-left">
+            <p class="font-semibold">Chat Too Long</p>
+            <p class="mt-1 text-gray-300">This chat has become too long to continue effectively. Please start a new chat to continue your conversation.</p>
+            <div class="mt-4 flex gap-2">
+              <Button
+                @click="handleNewChat" 
+                variant="default"
+                size="sm"
+                class="bg-white/20 hover:bg-white/30 text-white"
+              >
+                Start a New Chat
+              </Button>
+            </div>
+          </div>
+          <div v-else class="mt-2 text-left">
+            <p class="text-gray-300">{{ chatError }}</p>
+          </div>
+        
+        </div>
       </div>
     </div>
 
@@ -255,33 +320,6 @@
             <!-- End Conditional Send/Cancel Button -->
           </div>
         </div>
-
-        <!-- Bottom Controls -->
-        <div class="flex items-center gap-2 px-4 py-2 border-t border-[#1e1e1e]/50">
-          <div class="flex items-center gap-2">
-            <span class="text-sm text-muted-foreground">Model</span>
-          </div>
-
-          <Select
-            v-model="selectedModel"
-            :disabled="isLoading"
-          >
-            <SelectTrigger class="h-8 w-[200px] bg-[#0d1117] border-0 hover:bg-[#2e2e2e] text-sm">
-              <SelectValue :placeholder="selectedModel" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="gpt-4.1">gpt-4.1</SelectItem>
-              <SelectItem value="o4-mini">o4-mini</SelectItem>
-              <SelectItem value="claude-3-5-sonnet-latest">claude-3.5-sonnet</SelectItem>
-              <SelectItem value="claude-3-7-sonnet-latest">claude-3.7-sonnet</SelectItem>
-              <SelectItem value="gemini-2.5-pro-exp-03-25">gemini-2.5-pro</SelectItem>
-              <SelectItem value="deepseek-r1-distill-llama-70b">deepseek-r1-distill-llama-70b</SelectItem>
-              <SelectItem disabled value="llama3-8b-8192">llama3-8b-8192</SelectItem>
-              <SelectItem disabled value="meta-llama/llama-4-maverick-17b-128e-instruct">llama-4-maverick-17b-128e-instruct</SelectItem>
-              <SelectItem disabled value="qwen-qwq-32b">qwen-qwq-32b</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
       </div>
     </div>
   </div>
@@ -302,6 +340,8 @@ import {
 } from '@/components/ui/select';
 import { useToast } from "@/components/ui/toast/use-toast";
 import ToolExecution from './ToolExecution.vue';
+import { useSubscription } from '../composables/useSubscription';
+import { useAuthRedirect } from '../composables/useAuthRedirect';
 
 const props = defineProps({
   projectPath: {
@@ -327,6 +367,10 @@ const props = defineProps({
   homepageImageDataUrl: {
     type: String, // Data URL
     default: null
+  },
+  homepageSelectedModel: {
+    type: String,
+    default: null
   }
 });
 
@@ -341,14 +385,22 @@ const messagesAreaRef = ref(null);
 const textareaRef = ref(null);
 const fileInputRef = ref(null); // Ref for hidden file input
 const attachedImage = ref({ name: null, type: null, dataUrl: null }); // Ref for attached image
+const latestProjectCheckpointPath = ref(null); // NEW: To store the current latest checkpoint path of the project
+
+// Setup auth redirect composable
+const authRedirect = useAuthRedirect();
 
 // New refs for agent type and model selection
 const agentType = ref('ask');
-const LOCALSTORAGE_MODEL_KEY = 'embedr-last-used-model';
-const selectedModel = ref(localStorage.getItem(LOCALSTORAGE_MODEL_KEY) || 'gpt-4.1');
 
 // Add new refs for tracking tool executions
 const toolExecutions = ref(new Map()); // Map to track tool execution states
+
+const { subscription, isLoadingSubscription } = useSubscription();
+
+const isProUser = computed(() => {
+  return subscription.value?.planId === 'pro' && subscription.value?.status === 'active';
+});
 
 const LAST_SEEN_CHAT_KEY = (projectPath) => `embedr-last-seen-chat:${projectPath}`;
 
@@ -452,6 +504,9 @@ const loadChatMessages = async (threadIdToLoad) => {
     if (result.success) {
       const loadedMessages = result.messages || [];
       console.log(`[CopilotChat Load] Loaded ${loadedMessages.length} messages from ${threadIdToLoad}.full.json`);
+
+      // Fetch latest project checkpoint path when loading messages for context
+      await fetchLatestProjectCheckpointPath();
 
       toolExecutions.value = new Map();
       const toolStarts = loadedMessages.filter(m => m.role === 'tool' && m.toolPhase === 'start');
@@ -559,6 +614,13 @@ const handleDeleteChat = async () => {
   const threadToDelete = currentThreadId.value;
   const confirmed = window.confirm(`Are you sure you want to delete chat ${threadToDelete.substring(0, 8)}...?`);
   if (!confirmed) return;
+
+  // Before deleting, fetch the latest checkpoint path if no threads will remain
+  // (though this state might be more relevant when a new chat is made or another is selected)
+  if (availableThreads.value.length === 1) { // This is the last thread
+    // No specific action needed here for latestProjectCheckpointPath as it's tied to project, not thread
+  }
+
   isLoading.value = true;
   chatError.value = '';
   try {
@@ -658,7 +720,15 @@ const handleSendMessage = async () => {
     userMessageContent = userText;
   }
   
-  messages.value.push({ role: 'user', content: userMessageContent });
+  // NEW: Fetch the latest checkpoint path *before* creating the message
+  await fetchLatestProjectCheckpointPath();
+  const messageCheckpointPath = latestProjectCheckpointPath.value; // Store the version ID at the time of sending
+
+  messages.value.push({ 
+    role: 'user', 
+    content: userMessageContent,
+    checkpointPath: messageCheckpointPath // Store the then-current latest checkpoint path
+  });
   userInput.value = '';
   removeAttachedImage(); // Clear attached image after adding to message list
   isLoading.value = true;
@@ -676,7 +746,7 @@ const handleSendMessage = async () => {
     props.projectPath,
     props.selectedBoardFqbn,
     props.selectedPortPath,
-    selectedModel.value,
+    'gemini-2.5-flash-preview-05-20', // HARDCODED MODEL
     imageDataUrl // Pass image data URL as the new last argument
   );
 };
@@ -693,6 +763,10 @@ const cancelStream = () => {
 onMounted(async () => {
   // If threadId is provided and not present, create/select it before loading threads
   let usedThreadId = null;
+
+  // Initial fetch of latest project checkpoint path
+  await fetchLatestProjectCheckpointPath();
+
   if (props.threadId) {
     // Load threads first to check existence
     await loadAvailableThreads();
@@ -715,6 +789,7 @@ onMounted(async () => {
     console.log('[CopilotChat] Handling initial homepage query...');
     console.log('  Received homepageQuery:', props.homepageQuery);
     console.log('  Received homepageImageDataUrl:', props.homepageImageDataUrl ? props.homepageImageDataUrl.substring(0, 50) + '...' : null);
+    console.log('  Received homepageSelectedModel:', props.homepageSelectedModel);
     
     let initialMessageContent;
     if (props.homepageImageDataUrl) {
@@ -742,7 +817,7 @@ onMounted(async () => {
       props.projectPath,
       props.selectedBoardFqbn,
       props.selectedPortPath,
-      selectedModel.value,
+      'gemini-2.5-flash-preview-05-20', // HARDCODED MODEL
       props.homepageImageDataUrl // Pass image data URL
     );
 
@@ -850,6 +925,11 @@ onMounted(async () => {
       // messages.value.push({ role: 'system', content: 'Stream cancelled.' });
       toast({ title: 'Cancelled', description: 'AI response generation stopped.', duration: 2000 });
     }
+    // After any stream event that might indicate a project change (e.g., tool_end for a file edit tool)
+    // or 'done', it might be good to re-fetch the latest checkpoint path.
+    if (data.type === 'tool_end' || data.type === 'done' || data.type === 'error' || data.type === 'cancelled') {
+      fetchLatestProjectCheckpointPath();
+    }
   });
 });
 
@@ -861,7 +941,12 @@ watch(() => props.projectPath, (newPath, oldPath) => {
   if (newPath !== oldPath) {
     currentThreadId.value = null;
     messages.value = [];
-    loadAvailableThreads();
+    loadAvailableThreads(); // This will also trigger fetchLatestProjectCheckpointPath via loadChatMessages or initial mount logic
+    if (newPath) { // If there's a new valid project path
+      fetchLatestProjectCheckpointPath();
+    } else {
+      latestProjectCheckpointPath.value = null; // Clear if project path is removed
+    }
   }
 });
 
@@ -953,6 +1038,11 @@ watch(currentThreadId, (newId) => {
   if (props.projectPath && newId) {
     localStorage.setItem(LAST_SEEN_CHAT_KEY(props.projectPath), newId);
   }
+  // When currentThreadId changes, also refresh the latest project checkpoint path
+  // as the user is actively engaging with the chat interface.
+  if (newId) {
+    fetchLatestProjectCheckpointPath();
+  }
 });
 
 // === NEW: Handle Restore Checkpoint ===
@@ -1037,13 +1127,6 @@ const deduplicateToolMessages = (messages) => {
 // Computed property for filtered messages
 const displayMessages = computed(() => deduplicateToolMessages(messages.value));
 
-// Persist model selection to localStorage
-watch(selectedModel, (newValue) => {
-  if (newValue) {
-    localStorage.setItem(LOCALSTORAGE_MODEL_KEY, newValue);
-  }
-});
-
 // --- Image Expansion ---
 const expandedImages = ref({}); // Track expanded state by message index
 
@@ -1095,6 +1178,86 @@ const handleFileDrop = (event) => {
   handleFileSelected({ target: { files: [file] } }); 
 };
 // --- End Drag and Drop Handlers ---
+
+// NEW: Method to fetch the latest checkpoint path for the project
+const fetchLatestProjectCheckpointPath = async () => {
+  if (!props.projectPath) return;
+  try {
+    // Assume a new Electron API that returns the path/ID of the latest version
+    // for the main sketch or project.
+    // This API would need to be implemented in your main process.
+    const result = await window.electronAPI.getLatestCheckpointPathForProject(props.projectPath);
+    if (result && result.success) {
+      latestProjectCheckpointPath.value = result.latestCheckpointPath;
+      console.log('[CopilotChat] Updated latestProjectCheckpointPath:', latestProjectCheckpointPath.value);
+    } else {
+      latestProjectCheckpointPath.value = null; // Reset if not found or error
+      console.warn('[CopilotChat] Could not fetch latest project checkpoint path:', result?.error);
+    }
+  } catch (error) {
+    latestProjectCheckpointPath.value = null;
+    console.error('[CopilotChat] Error fetching latest project checkpoint path:', error);
+  }
+};
+
+// Expose the method for EditorPage to call
+defineExpose({
+  sendMessageFromEditor
+});
+
+// --- NEW: Method to send message from EditorPage ---
+async function sendMessageFromEditor(errorMessage) {
+  chatError.value = ''; // Clear any existing chat error
+
+  if (!props.projectPath) {
+    console.error('[sendMessageFromEditor] Project path is not available.');
+    chatError.value = 'Cannot send message: Project context is missing.';
+    return;
+  }
+
+  let targetThreadId = currentThreadId.value;
+
+  if (!targetThreadId) {
+    console.log('[sendMessageFromEditor] No current thread, creating a new one.');
+    await handleNewChat(); // This sets currentThreadId and saves it
+    targetThreadId = currentThreadId.value;
+    if (!targetThreadId) {
+        console.error('[sendMessageFromEditor] Failed to create a new chat thread.');
+        chatError.value = 'Failed to initiate a new chat for the error.';
+        return;
+    }
+  } else {
+    // Ensure the current chat is loaded if it wasn't already active
+    // or if messages are empty (e.g., after deleting a thread and one auto-selects)
+    if (messages.value.length === 0) {
+      await loadChatMessages(targetThreadId);
+    }
+  }
+  
+  await fetchLatestProjectCheckpointPath();
+  const messageCheckpointPath = latestProjectCheckpointPath.value;
+
+  messages.value.push({
+    role: 'user',
+    content: errorMessage,
+    checkpointPath: messageCheckpointPath
+  });
+
+  isLoading.value = true;
+
+  // Ensure image is not sent with this automated message
+  const imageToSend = null; 
+
+  window.electronAPI.sendCopilotMessageStream(
+    errorMessage, // The full error message is the primary user input
+    targetThreadId,
+    props.projectPath,
+    props.selectedBoardFqbn,
+    props.selectedPortPath,
+    'gemini-2.5-flash-preview-05-20', // HARDCODED MODEL
+    imageToSend
+  );
+}
 </script>
 
 <style scoped>

@@ -24,7 +24,7 @@
 </template>
 
 <script setup>
-import { ref, watchEffect } from 'vue'
+import { ref, watchEffect, computed } from 'vue'
 import { diffLines } from 'diff'
 
 const props = defineProps({
@@ -35,6 +35,35 @@ const props = defineProps({
 const diffParts = ref([])
 const oldLineNumbers = ref([])
 const newLineNumbers = ref([])
+
+// Computed property to process diff parts for cleaner rendering
+const processedDiffParts = computed(() => {
+  if (!diffParts.value) return [];
+  return diffParts.value.map(part => {
+    const all_lines = String(part.value || '').split('\n');
+    let lines_to_render;
+
+    // If the part's value ends with a newline, split('\n') creates a trailing empty string.
+    // We want to render lines based on content, not this artifact, unless the part is ONLY newlines.
+    if (all_lines.length > 1 && all_lines[all_lines.length - 1] === '' && part.value !== '\n') {
+      lines_to_render = all_lines.slice(0, -1); 
+    } else {
+      lines_to_render = all_lines;
+    }
+    
+    // Special case: if a part is truly empty (e.g. an unchanged empty segment), 
+    // lines_to_render might be [""] from split. This is correct for rendering one empty line.
+    // If part.value was just "" and lines_to_render became [], force it to [""]
+    if (part.value === "" && lines_to_render.length === 0) {
+      lines_to_render = [""];
+    }
+
+    return {
+      ...part,
+      rendered_lines: lines_to_render
+    };
+  });
+});
 
 watchEffect(() => {
   diffParts.value = diffLines(String(props.oldCode ?? ''), String(props.newCode ?? ''))
@@ -83,7 +112,7 @@ function getNewLineNumber(partIdx, lineIdx) {
 <style scoped>
 .code-diff {
   font-family: 'Fira Mono', 'Consolas', monospace;
-  background: #181a1b;
+  background: #1E1E1E; /* Match EditorPage editor background */
   color: #d4d4d4;
   padding: 16px;
   border-radius: 8px;
@@ -95,19 +124,18 @@ function getNewLineNumber(partIdx, lineIdx) {
   align-items: flex-start;
 }
 .gutter {
-  width: 2.5em;
+  width: 3em; /* Adjusted for a bit more space */
   text-align: right;
-  padding-right: 0.5em;
+  padding-right: 1em; /* Space before line content */
   user-select: none;
-  color: #666;
-  opacity: 0.7;
+  color: #858585; /* Match editor line numbers */
 }
 .old-gutter {
-  border-right: 1px solid #333;
+  /* border-right: 1px solid #333; Optional: if border desired */
 }
 .new-gutter {
-  border-right: 1px solid #222;
-  margin-right: 0.5em;
+  /* border-right: 1px solid #222; Optional: if border desired */
+  margin-right: 0.5em; /* Keep a small margin before line content */
 }
 .diff-line {
   white-space: pre;

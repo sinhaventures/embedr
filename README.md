@@ -81,8 +81,46 @@ arduino-cli core install espressif:esp32
 5. Build for production:
 
    ```bash
+   # Standard build (requires arduino-cli to be installed on user's machine)
    npm run electron:build
+   
+   # Complete build with bundled arduino-cli (recommended)
+   ./setup-and-build.sh
+   # OR
+   npm run build:full
    ```
+
+## Bundled Arduino CLI
+
+For production builds, Embedr bundles arduino-cli and popular board cores for a seamless user experience without requiring users to install arduino-cli separately.
+
+### How it works
+
+1. The `setup-and-build.sh` script:
+   - Downloads arduino-cli binaries for Windows, macOS, and Linux
+   - Creates proper configuration in `resources/arduino-cli/data`
+   - Optionally pre-installs common Arduino cores:
+     - arduino:avr (Uno, Nano, Mega, etc.)
+     - arduino:samd (MKR, Nano 33 IoT)
+     - esp8266:esp8266 (ESP8266 boards)
+     - esp32:esp32 (ESP32 boards)
+   - Packages everything with your app
+
+2. When running, Embedr:
+   - Uses bundled arduino-cli in production mode
+   - Falls back to system arduino-cli in development mode
+   - Sets up a portable data directory for each user
+
+### Build with bundled arduino-cli
+
+```bash
+# Option 1: Interactive script (recommended)
+./setup-and-build.sh
+
+# Option 2: Prepare arduino-cli and build separately
+npm run prepare-arduino  # Install Arduino cores to resources/arduino-cli/data
+npm run electron:build   # Build the application
+```
 
 ## Application Overview
 

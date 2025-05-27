@@ -1,78 +1,70 @@
 <template>
-  <div class="fixed inset-0 flex items-center justify-center bg-[#1E1E1E] text-white/90">
-    <div class="w-full max-w-md p-8">
+  <div class="fixed inset-0 flex items-center justify-center bg-[#1A1A1A] bg-opacity-95 backdrop-blur-xl text-[#EBEBF5] overflow-auto">
+    <div class="w-full max-w-[420px] flex flex-col items-center">
       <!-- Logo and Header -->
-      <div class="flex items-center justify-center gap-3 mb-12">
-        <div class="w-12 h-12 bg-[#2A2A2A] rounded-lg flex items-center justify-center">
-          <svg xmlns="http://www.w3.org/2000/svg" class="w-8 h-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M22 12h-4l-3 9L9 3l-3 9H2" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
+      <div class="flex items-center gap-3 mb-10">
+        <div class="w-14 h-14 bg-[#2A2A2A] rounded-2xl flex items-center justify-center shadow-sm">
+          <img src="../assets/logo-small.png" alt="Embedr Logo" class="w-10 h-10">
         </div>
         <div>
-          <h1 class="text-2xl font-semibold">Embedr</h1>
-          <div class="flex items-center gap-2 text-sm text-white/60">
-            <span>Pro</span>
-            <span>•</span>
-            <a href="#" class="text-[#5B8EFF] hover:text-[#5B8EFF]/90 transition-colors">Settings</a>
-          </div>
+          <h1 class="text-xl font-medium tracking-tight">Embedr</h1>
         </div>
       </div>
 
       <!-- Auth Container -->
-      <div class="bg-[#1A1A1A] rounded-xl border border-white/10 overflow-hidden">
+      <div class="w-full bg-[#2A2A2A]/80 backdrop-blur-md rounded-2xl border border-[#3A3A3C] shadow-xl overflow-hidden">
         <!-- Auth Tabs -->
-        <div class="flex border-b border-white/10">
-          <button 
-            v-for="tab in ['Login', 'Sign Up', 'Reset Password']" 
-            :key="tab"
-            @click="activeTab = tab"
-            :class="[
-              'flex-1 px-4 py-3 text-sm font-medium transition-colors',
-              activeTab === tab 
-                ? 'text-white bg-white/5' 
-                : 'text-white/60 hover:text-white/90'
-            ]"
-          >
-            {{ tab }}
-          </button>
+        <div class="px-4 pt-4">
+          <div class="flex bg-[#1C1C1E] p-0.5 rounded-lg text-xs font-medium">
+            <button 
+              v-for="tab in ['Login', 'Sign Up', 'Reset Password']" 
+              :key="tab"
+              @click="activeTab = tab"
+              :class="[
+                'flex-1 py-2 px-3 transition-all rounded-md',
+                activeTab === tab 
+                  ? 'bg-[#323234] text-white shadow-sm' 
+                  : 'text-[#EBEBF5]/60 hover:text-[#EBEBF5]'
+              ]"
+            >
+              {{ tab }}
+            </button>
+          </div>
         </div>
 
         <!-- Auth Forms -->
-        <div class="p-6">
+        <div class="p-5">
           <!-- Error/Success Messages -->
-          <div v-if="errorMessage" class="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-500 text-sm">
+          <div v-if="errorMessage" class="mb-5 p-3 bg-[#FF453A]/10 border border-[#FF453A]/20 rounded-lg text-[#FF453A] text-xs">
             {{ errorMessage }}
           </div>
-          <div v-if="successMessage" class="mb-4 p-3 bg-green-500/10 border border-green-500/20 rounded-lg text-green-500 text-sm">
+          <div v-if="successMessage" class="mb-5 p-3 bg-[#32D74B]/10 border border-[#32D74B]/20 rounded-lg text-[#32D74B] text-xs">
             {{ successMessage }}
           </div>
 
           <!-- Verify Email State -->
-          <div v-if="activeTab === 'Verify Email'" class="text-center py-4">
+          <div v-if="activeTab === 'Verify Email'" class="text-center py-3">
             <div class="mb-6">
-              <div class="w-16 h-16 bg-green-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg xmlns="http://www.w3.org/2000/svg" class="w-8 h-8 text-green-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <div class="w-14 h-14 bg-[#32D74B]/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-7 h-7 text-[#32D74B]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" stroke-linecap="round" stroke-linejoin="round"/>
                   <polyline points="22 4 12 14.01 9 11.01" stroke-linecap="round" stroke-linejoin="round"/>
                 </svg>
               </div>
-              <h3 class="text-xl font-semibold mb-2">Check your email</h3>
-              <p class="text-white/60 mb-4">
-                We've sent a verification link to your email address. Please check your inbox and click the link to verify your account.
+              <h3 class="text-lg font-medium mb-2">Check your email</h3>
+              <p class="text-[#EBEBF5]/60 text-sm mb-5">
+                We've sent a verification link to your email address.
               </p>
-              <p class="text-sm text-white/40">
-                Didn't receive the email? 
-                <button 
-                  @click="sendEmailVerification(auth.currentUser)"
-                  class="text-[#5B8EFF] hover:text-[#5B8EFF]/90 transition-colors"
-                >
-                  Resend verification email
-                </button>
-              </p>
+              <button 
+                @click="sendEmailVerification(auth.currentUser)"
+                class="text-rose-400 hover:text-rose-300 transition-colors text-xs font-medium bg-rose-400/10 px-4 py-2 rounded-lg"
+              >
+                Resend verification email
+              </button>
             </div>
             <button 
               @click="activeTab = 'Login'"
-              class="text-white/60 hover:text-white/90 transition-colors text-sm"
+              class="text-[#EBEBF5]/60 hover:text-[#EBEBF5] transition-colors text-xs"
             >
               ← Back to login
             </button>
@@ -81,112 +73,109 @@
           <!-- Login Form -->
           <form v-else-if="activeTab === 'Login'" @submit.prevent="handleSubmit" class="space-y-4">
             <div>
-              <label class="block text-sm text-white/60 mb-1">Email</label>
               <input 
                 type="email" 
                 v-model="email"
                 required
-                class="w-full px-4 py-2 bg-[#252525] border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#5B8EFF]/50 text-white/90"
-                placeholder="Enter your email"
+                class="w-full px-3.5 py-2.5 bg-[#232325] border border-[#3A3A3C] rounded-lg focus:outline-none focus:ring-1 focus:ring-rose-400 text-sm text-[#EBEBF5]/90"
+                placeholder="Email address"
               />
             </div>
             <div>
-              <label class="block text-sm text-white/60 mb-1">Password</label>
               <input 
                 type="password" 
                 v-model="password"
                 required
-                class="w-full px-4 py-2 bg-[#252525] border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#5B8EFF]/50 text-white/90"
-                placeholder="Enter your password"
+                class="w-full px-3.5 py-2.5 bg-[#232325] border border-[#3A3A3C] rounded-lg focus:outline-none focus:ring-1 focus:ring-rose-400 text-sm text-[#EBEBF5]/90"
+                placeholder="Password"
               />
             </div>
             <button 
               type="submit"
               :disabled="loading"
-              class="w-full py-2 bg-gradient-to-r from-orange-500 to-pink-500 rounded-lg text-white font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
+              class="w-full py-2.5 bg-rose-500 rounded-lg text-white text-sm font-medium hover:bg-rose-400 transition-colors disabled:opacity-50 mt-2 flex items-center justify-center"
             >
-              {{ loading ? 'Loading...' : 'Login' }}
+              <span v-if="loading" class="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></span>
+              {{ loading ? 'Signing in...' : 'Sign In' }}
             </button>
           </form>
 
           <!-- Sign Up Form -->
           <form v-else-if="activeTab === 'Sign Up'" @submit.prevent="handleSubmit" class="space-y-4">
             <div>
-              <label class="block text-sm text-white/60 mb-1">Name</label>
               <input 
                 type="text" 
                 v-model="name"
                 required
-                class="w-full px-4 py-2 bg-[#252525] border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#5B8EFF]/50 text-white/90"
-                placeholder="Enter your name"
+                class="w-full px-3.5 py-2.5 bg-[#232325] border border-[#3A3A3C] rounded-lg focus:outline-none focus:ring-1 focus:ring-rose-400 text-sm text-[#EBEBF5]/90"
+                placeholder="Your name"
               />
             </div>
             <div>
-              <label class="block text-sm text-white/60 mb-1">Email</label>
               <input 
                 type="email" 
                 v-model="email"
                 required
-                class="w-full px-4 py-2 bg-[#252525] border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#5B8EFF]/50 text-white/90"
-                placeholder="Enter your email"
+                class="w-full px-3.5 py-2.5 bg-[#232325] border border-[#3A3A3C] rounded-lg focus:outline-none focus:ring-1 focus:ring-rose-400 text-sm text-[#EBEBF5]/90"
+                placeholder="Email address"
               />
             </div>
             <div>
-              <label class="block text-sm text-white/60 mb-1">Password</label>
               <input 
                 type="password" 
                 v-model="password"
                 required
-                class="w-full px-4 py-2 bg-[#252525] border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#5B8EFF]/50 text-white/90"
+                class="w-full px-3.5 py-2.5 bg-[#232325] border border-[#3A3A3C] rounded-lg focus:outline-none focus:ring-1 focus:ring-rose-400 text-sm text-[#EBEBF5]/90"
                 placeholder="Choose a password"
               />
             </div>
             <button 
               type="submit"
               :disabled="loading"
-              class="w-full py-2 bg-gradient-to-r from-orange-500 to-pink-500 rounded-lg text-white font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
+              class="w-full py-2.5 bg-rose-500 rounded-lg text-white text-sm font-medium hover:bg-rose-400 transition-colors disabled:opacity-50 mt-2 flex items-center justify-center"
             >
-              {{ loading ? 'Loading...' : 'Create Account' }}
+              <span v-if="loading" class="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></span>
+              {{ loading ? 'Creating account...' : 'Create Account' }}
             </button>
           </form>
 
           <!-- Reset Password Form -->
           <form v-else-if="activeTab === 'Reset Password'" @submit.prevent="handleSubmit" class="space-y-4">
             <div>
-              <label class="block text-sm text-white/60 mb-1">Email</label>
               <input 
                 type="email" 
                 v-model="email"
                 required
-                class="w-full px-4 py-2 bg-[#252525] border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#5B8EFF]/50 text-white/90"
-                placeholder="Enter your email"
+                class="w-full px-3.5 py-2.5 bg-[#232325] border border-[#3A3A3C] rounded-lg focus:outline-none focus:ring-1 focus:ring-rose-400 text-sm text-[#EBEBF5]/90"
+                placeholder="Email address"
               />
             </div>
             <button 
               type="submit"
               :disabled="loading"
-              class="w-full py-2 bg-gradient-to-r from-orange-500 to-pink-500 rounded-lg text-white font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
+              class="w-full py-2.5 bg-rose-500 rounded-lg text-white text-sm font-medium hover:bg-rose-400 transition-colors disabled:opacity-50 mt-2 flex items-center justify-center"
             >
-              {{ loading ? 'Loading...' : 'Send Reset Link' }}
+              <span v-if="loading" class="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></span>
+              {{ loading ? 'Sending...' : 'Send Reset Link' }}
             </button>
           </form>
 
           <!-- Form Footer -->
-          <div v-if="activeTab !== 'Verify Email'" class="mt-6 text-center text-sm text-white/60">
+          <div v-if="activeTab !== 'Verify Email'" class="mt-6 text-center text-xs text-[#EBEBF5]/60">
             <p v-if="activeTab === 'Login'">
               Don't have an account? 
-              <button @click="activeTab = 'Sign Up'" class="text-[#5B8EFF] hover:text-[#5B8EFF]/90 transition-colors">
+              <button @click="activeTab = 'Sign Up'" class="text-rose-400 hover:text-rose-300 transition-colors ml-1 bg-transparent">
                 Sign up
               </button>
             </p>
             <p v-if="activeTab === 'Sign Up'">
               Already have an account? 
-              <button @click="activeTab = 'Login'" class="text-[#5B8EFF] hover:text-[#5B8EFF]/90 transition-colors">
+              <button @click="activeTab = 'Login'" class="text-rose-400 hover:text-rose-300 transition-colors ml-1">
                 Login
               </button>
             </p>
-            <p v-if="activeTab === 'Login'">
-              <button @click="activeTab = 'Reset Password'" class="text-[#5B8EFF] hover:text-[#5B8EFF]/90 transition-colors">
+            <p v-if="activeTab === 'Login'" class="mt-2">
+              <button @click="activeTab = 'Reset Password'" class="text-rose-400 hover:text-rose-300 transition-colors">
                 Forgot password?
               </button>
             </p>
@@ -200,7 +189,7 @@
 <script setup>
 import { ref, watch } from 'vue'
 import { auth } from '../firebase/config'
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword, sendEmailVerification, sendPasswordResetEmail } from 'firebase/auth'
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword, sendEmailVerification, sendPasswordResetEmail, updateProfile } from 'firebase/auth'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuth } from '../composables/useAuth'
 
@@ -234,6 +223,19 @@ async function handleSubmit() {
     } 
     else if (activeTab.value === 'Sign Up') {
       const { user: newUser } = await createUserWithEmailAndPassword(auth, email.value, password.value)
+      
+      // Save the user's name to their profile
+      if (name.value.trim()) {
+        try {
+          await updateProfile(newUser, {
+            displayName: name.value.trim()
+          });
+          console.log('User profile updated with name:', name.value.trim());
+        } catch (profileError) {
+          console.error('Error updating user profile:', profileError);
+        }
+      }
+      
       await sendEmailVerification(newUser)
       activeTab.value = 'Verify Email'
       successMessage.value = 'Registration successful! Please check your email for verification.'
@@ -270,5 +272,19 @@ async function handleSubmit() {
 </script>
 
 <style scoped>
-/* Add any additional component-specific styles here */
+input, button {
+  transition: all 0.2s ease;
+}
+
+input::placeholder {
+  color: rgba(235, 235, 245, 0.5);
+}
+
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0px 1000px #232325 inset;
+  -webkit-text-fill-color: rgba(235, 235, 245, 0.9);
+  transition: background-color 5000s ease-in-out 0s;
+}
 </style> 
