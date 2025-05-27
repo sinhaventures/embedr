@@ -81,6 +81,13 @@
   "build": {
     "appId": "com.embedr.app",
     "productName": "Embedr",
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "sinhaventures",
+        "repo": "embedr"
+      }
+    ],
     "directories": {
       "output": "dist_electron"
     },
