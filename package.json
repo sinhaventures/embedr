@@ -3,7 +3,7 @@
   "private": true,
   "description": "Embedr - AI Powered Arduino IDE",
   "author": "Sinha Ventures <support@embedr.cc>",
-  "version": "0.0.0",
+  "version": "0.0.2",
   "type": "commonjs",
   "main": "main.js",
   "scripts": {
