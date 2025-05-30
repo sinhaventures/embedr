@@ -21,6 +21,9 @@ autoUpdater.logger = log;
 autoUpdater.logger.transports.file.level = 'info';
 log.info('App starting...');
 
+// === Placeholder for your website's download page ===
+const MACOS_MANUAL_DOWNLOAD_URL = 'https://embedr.cc/download';
+
 // === AI Co-pilot/Agent dependencies ===
 //require('dotenv').config();
 
@@ -125,12 +128,22 @@ function createWindow () {
 app.whenReady().then(() => {
   createWindow();
 
+  // Configure autoUpdater properties based on platform
+  if (process.platform === 'darwin') {
+    log.info('[Main Process] macOS detected, setting autoDownload to false for manual update notification.');
+    autoUpdater.autoDownload = false;
+  } else {
+    // For other platforms, you might want to keep autoDownload = true (default)
+    // or set it explicitly if you change the default elsewhere.
+    // autoUpdater.autoDownload = true; 
+  }
+
   // Check for updates after the app is ready and window is created
   // It's often good to wait a few seconds so the app is responsive
   setTimeout(() => {
     if (process.env.NODE_ENV !== 'development' && !process.env.ELECTRON_IS_DEV) { // Don't auto-update in dev
-        log.info('[Main Process] Checking for updates (no direct notify)...');
-        autoUpdater.checkForUpdates(); // Changed from checkForUpdatesAndNotify
+        log.info('[Main Process] Checking for updates...');
+        autoUpdater.checkForUpdates();
     }
   }, 10000); // Increased delay to 10s to ensure app is fully up
 
@@ -161,8 +174,16 @@ autoUpdater.on('checking-for-update', () => {
 autoUpdater.on('update-available', (info) => {
   log.info('[Main Process] Update available.', info);
   if (mainWindow) {
-    mainWindow.webContents.send('update-available', info.version);
+    // Send version and release notes (or name as fallback)
+    const updateDetails = {
+      version: info.version,
+      releaseNotes: info.releaseNotes || `Version ${info.version} is available.`,
+      isManualDownload: process.platform === 'darwin' // Explicitly tell renderer if it's manual
+    };
+    mainWindow.webContents.send('update-available', updateDetails);
   }
+  // If on macOS (autoDownload = false), the update won't download automatically.
+  // For other platforms, it will start downloading if autoDownload is true.
 });
 
 autoUpdater.on('update-not-available', (info) => {
@@ -187,16 +208,25 @@ autoUpdater.on('download-progress', (progressObj) => {
 });
 
 autoUpdater.on('update-downloaded', (info) => {
-  log.info('[Main Process] Update downloaded.', info);
+  log.info('[Main Process] Update downloaded (or ready for manual notification on macOS if download was skipped).', info);
   if (mainWindow) {
-    mainWindow.webContents.send('update-downloaded', info.version);
+    const updateDetails = {
+        version: info.version,
+        releaseNotes: info.releaseNotes || `Version ${info.version} has been downloaded.`,
+        isManualDownload: process.platform === 'darwin' && autoUpdater.autoDownload === false
+    };
+    // For macOS with autoDownload=false, this event might not be the primary trigger for UI
+    // 'update-available' is more reliable. But if it does fire, ensure UI gets the right info.
+    mainWindow.webContents.send('update-downloaded', updateDetails);
   }
-  // The renderer will now handle the prompt and call 'quit-and-install-update'
 });
 
 // Listen for the renderer to tell us to quit and install
 ipcMain.on('quit-and-install-update', () => {
   log.info('[Main Process] Received quit-and-install-update from renderer.');
+  // This will only work if the update has actually been downloaded.
+  // For macOS with autoDownload = false, this shouldn't be called by the UI directly
+  // unless a download was somehow completed.
   autoUpdater.quitAndInstall();
 });
 // --- End Auto Updater Events ---
@@ -2788,5 +2818,17 @@ ipcMain.handle('open-external-url', async (event, url) => {
   } catch (error) {
     console.error(`[IPC Handler] Error opening external URL:`, error);
     return { success: false, error: error.message || 'Failed to open external URL.' };
+  }
+});
+
+// Handler for renderer to open the manual download URL
+ipcMain.handle('open-manual-download-url', async () => {
+  log.info(`[Main Process] Opening manual download URL: ${MACOS_MANUAL_DOWNLOAD_URL}`);
+  try {
+    await shell.openExternal(MACOS_MANUAL_DOWNLOAD_URL);
+    return { success: true };
+  } catch (error) {
+    log.error('[Main Process] Error opening external URL:', error);
+    return { success: false, error: error.message };
   }
 });

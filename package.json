@@ -36,6 +36,7 @@
     "dotenv": "^16.5.0",
     "electron-log": "^5.4.0",
     "electron-squirrel-startup": "^1.0.1",
+    "electron-updater": "^6.6.2",
     "firebase": "^11.6.0",
     "highlight.js": "^11.11.1",
     "langchain": "^0.3.24",
@@ -81,13 +82,12 @@
   "build": {
     "appId": "com.embedr.app",
     "productName": "Embedr",
-    "publish": [
-      {
-        "provider": "github",
-        "owner": "sinhaventures",
-        "repo": "embedr"
-      }
-    ],
+    "publish": {
+      "provider": "github",
+      "owner": "sinhaventures",
+      "repo": "embedr",
+      "releaseType": "draft"
+    },
     "directories": {
       "output": "dist_electron"
     },

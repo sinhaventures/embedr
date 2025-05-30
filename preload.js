@@ -18,6 +18,7 @@ ipcRenderer.on('show-agent-cli-output', (_event, output) => {
 // -----------------------------------------------
 
 contextBridge.exposeInMainWorld('electronAPI', {
+  platform: process.platform,
   compileSketch: (baseFqbn, options, sketchPath) => ipcRenderer.invoke('compile-sketch', baseFqbn, options, sketchPath),
   uploadSketch: (baseFqbn, options, port, sketchPath) => ipcRenderer.invoke('upload-sketch', baseFqbn, options, port, sketchPath),
   listProjects: () => ipcRenderer.invoke('list-projects'),
@@ -164,12 +165,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // =======================================================
 
   // --- Auto Update API ---
-  onUpdateAvailable: (callback) => ipcRenderer.on('update-available', (_event, version) => callback(version)),
-  onUpdateDownloaded: (callback) => ipcRenderer.on('update-downloaded', (_event, version) => callback(version)),
+  onUpdateAvailable: (callback) => ipcRenderer.on('update-available', (_event, updateDetails) => callback(updateDetails)),
+  onUpdateDownloaded: (callback) => ipcRenderer.on('update-downloaded', (_event, updateDetails) => callback(updateDetails)),
   onUpdateError: (callback) => ipcRenderer.on('update-error', (_event, errorMsg) => callback(errorMsg)),
   quitAndInstallUpdate: () => ipcRenderer.send('quit-and-install-update'),
-  // It's good practice to provide a way to remove listeners if App.vue is unmounted and remounted,
-  // though for a root component like App.vue it might be less critical.
+  openManualDownloadUrl: () => ipcRenderer.invoke('open-manual-download-url'),
   removeAllUpdateListeners: () => {
     ipcRenderer.removeAllListeners('update-available');
     ipcRenderer.removeAllListeners('update-downloaded');

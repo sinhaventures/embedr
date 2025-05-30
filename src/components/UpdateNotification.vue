@@ -6,11 +6,12 @@
         <XIcon class="w-4 h-4" />
       </button>
     </div>
-    <p class="text-xs text-zinc-300 mb-3">Version {{ version }} is ready to install.</p>
-    <div class="flex space-x-2">
-      <Button @click="installAndRestart" size="sm" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-xs h-8">Install & Restart</Button>
-      <!-- You could add a "Later" button if desired -->
-      <!-- <Button @click="dismiss" variant="outline" size="sm" class="flex-1 text-xs border-zinc-600 hover:bg-zinc-700 h-8">Later</Button> -->
+    <p class="text-xs text-zinc-300 mb-1">Version {{ version }} is ready.</p>
+    <p v-if="releaseNotes && releaseNotes !== `Version ${version} is available.` && releaseNotes !== `Version ${version} has been downloaded.`" class="text-xs text-zinc-400 mb-3 max-h-20 overflow-y-auto custom-scrollbar">{{ releaseNotes }}</p>
+    <div class="flex space-x-2 mt-2">
+      <Button @click="installOrDownload" size="sm" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-xs h-8">
+        {{ (platform === 'darwin' && isManualDownload) ? 'Download Update' : 'Install & Restart' }}
+      </Button>
     </div>
   </div>
 </template>
@@ -26,12 +27,15 @@ import { XIcon } from 'lucide-vue-next';
 defineProps({
   visible: Boolean,
   version: String,
+  releaseNotes: String,
+  isManualDownload: Boolean,
+  platform: String,
 });
 
 const emit = defineEmits(['install', 'dismiss']);
 
-const installAndRestart = () => {
-  emit('install');
+const installOrDownload = () => {
+  emit('install'); // App.vue will handle the logic based on platform
 };
 
 const dismiss = () => {
@@ -44,5 +48,18 @@ const dismiss = () => {
 .fixed {
   /* High z-index to ensure it's on top of most content */
   z-index: 1000; 
+}
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #555;
+  border-radius: 2px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #777;
 }
 </style> 
