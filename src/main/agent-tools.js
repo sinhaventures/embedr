@@ -41,24 +41,6 @@ function getMainInoPath(projectPath) {
 
 // --- Board and Port Tools ---
 
-const listBoardsTool = tool(
-  async (_input, { config }) => {
-    console.log('[Agent Tool] Calling list-all-boards');
-    try {
-      const result = await invokeIpc('list-all-boards');
-      return result.success ? JSON.stringify(result.boards) : `Error listing boards: ${result.error}`;
-    } catch (error) {
-      console.error('[Agent Tool Error] listBoardsTool:', error);
-      return `Failed to execute list boards command: ${error.message}`;
-    }
-  },
-  {
-    name: 'listBoards',
-    description: 'List all available Arduino boards and their FQBNs (Fully Qualified Board Names). Use this if you need to know the FQBN for compiling or uploading.',
-    schema: z.object({}), // No input
-  }
-);
-
 const listSerialPortsTool = tool(
   async (_input, { config }) => {
     console.log('[Agent Tool] Calling list-serial-ports');
@@ -72,7 +54,7 @@ const listSerialPortsTool = tool(
   },
   {
     name: 'listSerialPorts',
-    description: 'List all available serial ports. Use this to find the correct port path for uploading code or connecting to the serial monitor.',
+    description: 'List all available serial ports. Use this to find the correct port path for uploading code.',
     schema: z.object({}), // No input
   }
 );
@@ -119,10 +101,13 @@ const compileSketchTool = tool(
     }
     
     try {
-      // Use our custom invokeIpc function
-      // Pass the full fqbn as baseFqbn and null for options (as before)
-      console.log(`[Agent Tool] Calling invokeIpc('compile-sketch', ${fqbn}, null, ${sketchPath})`);
-      const result = await invokeIpc('compile-sketch', fqbn, null, sketchPath); 
+      // Get the current board options from the global state
+      const boardOptionsResult = await invokeIpc('get-current-board-options');
+      const boardOptions = boardOptionsResult?.options || {};
+      
+      // Use our custom invokeIpc function with proper argument order and board options
+      console.log(`[Agent Tool] Calling invokeIpc('compile-sketch', ${fqbn}, ${JSON.stringify(boardOptions)}, ${sketchPath})`);
+      const result = await invokeIpc('compile-sketch', fqbn, boardOptions, sketchPath); 
 
       if (result.success) {
         // --- SUCCESS CASE --- 
@@ -222,8 +207,13 @@ const uploadSketchTool = tool(
     if (!port) return 'Error: port argument is missing.';
 
     try {
-      // Use our custom invokeIpc function
-      const result = await invokeIpc('upload-sketch', sketchPath, port, fqbn);
+      // Get the current board options from the global state
+      const boardOptionsResult = await invokeIpc('get-current-board-options');
+      const boardOptions = boardOptionsResult?.options || {};
+      
+      // Use our custom invokeIpc function with proper argument order and board options
+      console.log(`[Agent Tool] Calling invokeIpc('upload-sketch', ${fqbn}, ${JSON.stringify(boardOptions)}, ${port}, ${sketchPath})`);
+      const result = await invokeIpc('upload-sketch', fqbn, boardOptions, port, sketchPath);
       if (result.success) {
         return `Upload successful. Output:\n${result.output}`;
       } else {
@@ -243,102 +233,6 @@ const uploadSketchTool = tool(
       fqbn: z.string().describe('The Fully Qualified Board Name (e.g., "arduino:avr:uno").'),
       port: z.string().describe('The serial port path (e.g., "/dev/ttyACM0" or "COM3").'),
     }),
-  }
-);
-
-// --- Serial Monitor Tools ---
-
-const connectSerialTool = tool(
-  async ({ port, baudRate = 9600 }) => {
-    console.log('[Agent Tool] Calling serial-connect');
-    if (!port) return 'Error: Serial port path is required. Use "listSerialPorts" to find the available ports.';
-    try {
-      // Use our custom invokeIpc function
-      const result = await invokeIpc('serial-connect', port, baudRate);
-      return result.success ? `Successfully connected to serial port ${port} at ${baudRate} baud. The application will now display incoming serial data.` : `Failed to connect to serial port ${port}. Error: ${result.error}`;
-    } catch (error) {
-      console.error('[Agent Tool Error] connectSerialTool:', error);
-      return `Failed to execute serial connect command: ${error.message}`;
-    }
-  },
-  {
-    name: 'connectSerialMonitor',
-    description: 'Connect to a specified serial port to monitor its output. Requires the port path. Default baud rate is 9600.',
-    schema: z.object({
-      port: z.string().describe('The serial port path to connect to (e.g., "/dev/ttyACM0" or "COM3"). Use "listSerialPorts" tool if unsure.'),
-      baudRate: z.number().optional().describe('The baud rate for the connection (default: 9600).'),
-    }),
-  }
-);
-
-const disconnectSerialTool = tool(
-  async (_input) => {
-    console.log('[Agent Tool] Calling serial-disconnect');
-    try {
-      // Use our custom invokeIpc function
-      const result = await invokeIpc('serial-disconnect');
-      return result.success ? 'Successfully disconnected from the serial port.' : `Attempted to disconnect. Result: ${result.error || 'Port was likely already closed.'}`;
-    } catch (error) {
-      console.error('[Agent Tool Error] disconnectSerialTool:', error);
-      return `Failed to execute serial disconnect command: ${error.message}`;
-    }
-  },
-  {
-    name: 'disconnectSerialMonitor',
-    description: 'Disconnect from the currently active serial port monitor.',
-    schema: z.object({}), // No input
-  }
-);
-
-const sendSerialDataTool = tool(
-  async ({ dataToSend }) => {
-    console.log('[Agent Tool] Calling serial-send');
-    if (dataToSend === undefined || dataToSend === null) {
-        return 'Error: No data provided to send.';
-    }
-    try {
-      // Use our custom invokeIpc function
-      const result = await invokeIpc('serial-send', String(dataToSend)); // Ensure data is a string
-      return result.success ? 'Data sent successfully to the serial port.' : `Failed to send data. Error: ${result.error}`;
-    } catch (error) {
-      console.error('[Agent Tool Error] sendSerialDataTool:', error);
-      return `Failed to execute serial send command: ${error.message}`;
-    }
-  },
-  {
-    name: 'sendSerialData',
-    description: 'Send a string of data to the currently connected serial port. A newline character is automatically appended.',
-    schema: z.object({
-      dataToSend: z.string().describe('The string data to send over the serial connection.'),
-    }),
-  }
-);
-
-// Note: A tool to *read* serial data directly is complex because it's asynchronous.
-// The current approach relies on the main process pushing data ('serial-data' event).
-// An agent tool could potentially check the status or maybe retrieve a buffer if one was maintained,
-// but a simple "read" isn't directly possible with the current IPC setup.
-
-const getSerialStatusTool = tool(
-  async (_input) => {
-    console.log('[Agent Tool] Calling get-serial-status');
-    try {
-      // Use our custom invokeIpc function
-      const statusInfo = await invokeIpc('get-serial-status');
-      if (statusInfo.connected) {
-          return `Serial monitor is connected to port: ${statusInfo.port}`;
-      } else {
-          return 'Serial monitor is not currently connected.';
-      }
-    } catch (error) {
-        console.error('[Agent Tool Error] getSerialStatusTool:', error);
-        return `Failed to execute get serial status command: ${error.message}`;
-    }
-  },
-  {
-    name: 'getSerialMonitorStatus',
-    description: 'Check the current connection status of the serial monitor.',
-    schema: z.object({}), // No input
   }
 );
 
@@ -659,14 +553,9 @@ const selectPortTool = tool(
 
 // Export all tools as an array
 module.exports = [
-  listBoardsTool,
   listSerialPortsTool,
   compileSketchTool,
   uploadSketchTool,
-  connectSerialTool,
-  disconnectSerialTool,
-  sendSerialDataTool,
-  getSerialStatusTool,
   modifySketchTool,
   getSketchContentTool,
   searchLibraryTool,

@@ -14,7 +14,21 @@
         :disabled="isLoadingThreads || availableThreads.length === 0"
       >
         <SelectTrigger class="w-[200px] bg-[#1e1e1e] border-0 hover:bg-[#2e2e2e]">
-          <SelectValue :placeholder="currentThreadId ? `Chat ${currentThreadId.substring(0, 8)}...` : 'Select a chat'" />
+          <SelectValue>
+            <span v-if="currentThreadId" class="flex items-center gap-2">
+              <span v-if="isGeneratingName" class="inline-flex items-center gap-1">
+                <svg class="animate-spin h-3 w-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                </svg>
+                <span class="text-xs text-muted-foreground">Naming...</span>
+              </span>
+              <span v-else>
+                {{ currentThreadName || `Chat ${currentThreadId.substring(0, 8)}...` }}
+              </span>
+            </span>
+            <span v-else class="text-muted-foreground">Select a chat</span>
+          </SelectValue>
         </SelectTrigger>
         <SelectContent>
           <SelectItem 
@@ -22,7 +36,18 @@
             :key="thread.id" 
             :value="thread.id"
           >
-            {{ thread.name || `Chat ${thread.id.substring(0, 8)}...` }}
+            <span class="flex items-center gap-2">
+              <span v-if="isGeneratingName && thread.id === currentThreadId" class="inline-flex items-center gap-1">
+                <svg class="animate-spin h-3 w-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                </svg>
+                <span class="text-xs">Naming...</span>
+              </span>
+              <span v-else>
+                {{ thread.name || `Chat ${thread.id.substring(0, 8)}...` }}
+              </span>
+            </span>
           </SelectItem>
         </SelectContent>
       </Select>
@@ -220,6 +245,23 @@
               </Button>
             </div>
           </div>
+          <!-- NEW: Handling for connection errors -->
+          <div v-else-if="chatError.includes('Connection error')" class="mt-2 text-left">
+            <p class="font-semibold">Connection Error</p>
+            <p class="mt-1 text-gray-300">Unable to connect to the server. Please check your internet connection and try again.</p>
+            <div class="mt-4 flex gap-2">
+              <Button
+                @click="handleRetryLastMessage" 
+                variant="default"
+                size="sm"
+                class="bg-white/20 hover:bg-white/30 text-white"
+                :disabled="isLoading || !canRetry"
+              >
+                <span v-if="isLoading" class="animate-spin mr-2 w-4 h-4 inline-block border-2 border-t-transparent border-white rounded-full"></span>
+                Retry
+              </Button>
+            </div>
+          </div>
           <div v-else class="mt-2 text-left">
             <p class="text-gray-300">{{ chatError }}</p>
           </div>
@@ -262,11 +304,20 @@
                 Remove
               </Button>
             </div>
-            <div v-else class="flex-1 h-8"></div> <!-- Placeholder to keep height consistent -->
+            <div v-else class="flex-1 h-8 flex items-center">
+              <!-- Character counter when approaching limit -->
+              <span 
+                v-if="userInput.length > 8000" 
+                class="text-xs text-muted-foreground ml-2"
+                :class="{ 'text-yellow-400': userInput.length > 9000, 'text-red-400': userInput.length > 9500 }"
+              >
+                {{ userInput.length }}/10,000
+              </span>
+            </div>
           </div>
 
           <!-- Text Input -->
-          <div class="flex gap-2 p-4">
+          <div class="p-4">
             <!-- Hidden File Input -->
             <input 
               type="file" 
@@ -275,49 +326,53 @@
               accept="image/*" 
               class="hidden" 
             />
-            <textarea
-              v-model="userInput"
-              rows="1"
-              placeholder="Ask Embedr for help..."
-              class="flex-1 resize-none bg-[#1e1e1e] text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none min-h-[44px] py-3 px-4 rounded-md"
-              :disabled="isLoading || !currentThreadId"
-              @keydown.enter.exact.prevent="handleSendMessage"
-              @input="autoGrow"
-              ref="textareaRef"
-            ></textarea>
-            <!-- Conditional Send/Cancel Button -->
-            <Button
-              v-if="!isLoading"
-              @click="handleSendMessage"
-              :disabled="isLoading || !currentThreadId || (!userInput.trim() && !attachedImage.dataUrl)"
-              size="icon"
-              variant="ghost"
-              class="shrink-0 h-[44px] w-[44px] hover:bg-[#2e2e2e] rounded-md transition-colors"
-              title="Send Message"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 16 16"
-                fill="none"
-                class="size-4"
-              >
-                <path
-                  d="M.5 1.163A1 1 0 0 1 1.97.28l12.868 6.837a1 1 0 0 1 0 1.766L1.969 15.72A1 1 0 0 1 .5 14.836V10.33a1 1 0 0 1 .816-.983L8.5 8 1.316 6.653A1 1 0 0 1 .5 5.67V1.163Z"
-                  fill="currentColor"
-                ></path>
-              </svg>
-            </Button>
-            <Button
-              v-else 
-              @click="cancelStream"
-              size="icon"
-              variant="destructive"
-              class="shrink-0 h-[44px] w-[44px] bg-red-800/50 hover:bg-red-700/70 rounded-md animate-pulse"
-              title="Cancel Generation"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-white"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><line x1="9" x2="15" y1="9" y2="15"/><line x1="15" x2="9" y1="9" y2="15"/></svg>
-            </Button>
-            <!-- End Conditional Send/Cancel Button -->
+            <!-- Textarea Container with relative positioning -->
+            <div class="relative">
+              <textarea
+                v-model="userInput"
+                rows="1"
+                placeholder="Ask Embedr for help..."
+                class="w-full resize-none bg-[#1e1e1e] text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none min-h-[44px] max-h-[160px] py-3 px-4 pr-12 rounded-md overflow-y-hidden scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent"
+                :disabled="isLoading || !currentThreadId"
+                @keydown="handleKeyDown"
+                @input="debouncedAutoGrow"
+                ref="textareaRef"
+              ></textarea>
+              <!-- Conditional Send/Cancel Button - positioned absolutely -->
+              <div class="absolute bottom-3 right-3">
+                <Button
+                  v-if="!isLoading"
+                  @click="handleSendMessage"
+                  :disabled="!showSendButton"
+                  size="icon"
+                  variant="ghost"
+                  class="h-7 w-7 hover:bg-[#2e2e2e] rounded-md transition-colors flex items-center justify-center"
+                  title="Send Message"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 16 16"
+                    fill="none"
+                    class="size-4"
+                  >
+                    <path
+                      d="M.5 1.163A1 1 0 0 1 1.97.28l12.868 6.837a1 1 0 0 1 0 1.766L1.969 15.72A1 1 0 0 1 .5 14.836V10.33a1 1 0 0 1 .816-.983L8.5 8 1.316 6.653A1 1 0 0 1 .5 5.67V1.163Z"
+                      fill="currentColor"
+                    ></path>
+                  </svg>
+                </Button>
+                <Button
+                  v-else 
+                  @click="cancelStream"
+                  size="icon"
+                  variant="destructive"
+                  class="h-7 w-7 bg-red-800/50 hover:bg-red-700/70 rounded-md animate-pulse flex items-center justify-center"
+                  title="Cancel Generation"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-white"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><line x1="9" x2="15" y1="9" y2="15"/><line x1="15" x2="9" y1="9" y2="15"/></svg>
+                </Button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -381,6 +436,7 @@ const currentThreadId = ref(null);
 const availableThreads = ref([]);
 const isLoadingThreads = ref(false);
 const chatError = ref('');
+const isGeneratingName = ref(false);
 const messagesAreaRef = ref(null);
 const textareaRef = ref(null);
 const fileInputRef = ref(null); // Ref for hidden file input
@@ -399,10 +455,29 @@ const toolExecutions = ref(new Map()); // Map to track tool execution states
 const { subscription, isLoadingSubscription } = useSubscription();
 
 const isProUser = computed(() => {
-  return subscription.value?.planId === 'pro' && subscription.value?.status === 'active';
+  const planId = subscription.value?.planId;
+  const status = subscription.value?.status;
+  const isProPlan = planId === 'pro_monthly' || planId === 'pro_yearly' || planId === 'pro'; // Include legacy 'pro' for compatibility
+  const isValidStatus = status === 'active' || status === 'authenticated'; // Based on your subscription guide
+  return isProPlan && isValidStatus;
+});
+
+// Computed property to check if we can retry (last message was from user)
+const canRetry = computed(() => {
+  if (messages.value.length === 0) return false;
+  const lastMessage = messages.value[messages.value.length - 1];
+  return lastMessage.role === 'user';
+});
+
+// Computed property for current thread name to ensure reactivity
+const currentThreadName = computed(() => {
+  if (!currentThreadId.value) return null;
+  const thread = availableThreads.value.find(t => t.id === currentThreadId.value);
+  return thread?.name || null;
 });
 
 const LAST_SEEN_CHAT_KEY = (projectPath) => `embedr-last-seen-chat:${projectPath}`;
+const THREAD_NAMES_KEY = (projectPath) => `embedr-thread-names:${projectPath}`;
 
 const { toast } = useToast();
 
@@ -411,6 +486,20 @@ let copyTimeout = null;
 
 // Helper to get/set last used timestamps for threads in localStorage
 const THREAD_LAST_USED_KEY = (projectPath) => `embedr-thread-last-used:${projectPath}`;
+
+// Helper to get/set thread names in localStorage
+function getThreadNamesMap(projectPath) {
+  try {
+    return JSON.parse(localStorage.getItem(THREAD_NAMES_KEY(projectPath)) || '{}');
+  } catch {
+    return {};
+  }
+}
+function setThreadName(projectPath, threadId, name) {
+  const map = getThreadNamesMap(projectPath);
+  map[threadId] = name;
+  localStorage.setItem(THREAD_NAMES_KEY(projectPath), JSON.stringify(map));
+}
 
 function getThreadLastUsedMap(projectPath) {
   try {
@@ -425,19 +514,91 @@ function setThreadLastUsed(projectPath, threadId) {
   localStorage.setItem(THREAD_LAST_USED_KEY(projectPath), JSON.stringify(map));
 }
 
-// Auto-grow textarea
+// NEW: Computed property to check if textarea should show send button
+const showSendButton = computed(() => {
+  return !isLoading.value && currentThreadId.value && (userInput.value.trim() || attachedImage.value.dataUrl);
+});
+
+// NEW: Debounced autogrow for better performance
+let autoGrowTimeout = null;
+const debouncedAutoGrow = () => {
+  if (autoGrowTimeout) {
+    clearTimeout(autoGrowTimeout);
+  }
+  autoGrowTimeout = setTimeout(autoGrow, 16); // ~60fps
+};
+
+// Enhanced auto-grow function with performance improvements
 const autoGrow = () => {
   if (!textareaRef.value) return;
-  textareaRef.value.style.height = 'auto';
-  textareaRef.value.style.height = textareaRef.value.scrollHeight + 'px';
+  
+  // Use requestAnimationFrame for smooth animations
+  requestAnimationFrame(() => {
+    // Reset height to get accurate scrollHeight
+    textareaRef.value.style.height = 'auto';
+    
+    // Define maximum height (equivalent to about 8 lines of text)
+    const maxHeight = 160; // pixels
+    const minHeight = 44; // pixels (matches min-h-[44px])
+    
+    // Calculate the required height
+    const scrollHeight = textareaRef.value.scrollHeight;
+    const newHeight = Math.min(Math.max(scrollHeight, minHeight), maxHeight);
+    
+    // Set the height
+    textareaRef.value.style.height = newHeight + 'px';
+    
+    // Enable/disable scrolling based on whether we've hit the max height
+    if (scrollHeight > maxHeight) {
+      textareaRef.value.style.overflowY = 'auto';
+    } else {
+      textareaRef.value.style.overflowY = 'hidden';
+    }
+  });
+};
+
+// NEW: Enhanced focus function with better error handling and timing
+const focusInput = async () => {
+  try {
+    // Wait for multiple ticks to ensure DOM is ready
+    await nextTick();
+    await nextTick();
+    
+    if (textareaRef.value && !textareaRef.value.disabled && currentThreadId.value) {
+      // Use requestAnimationFrame to ensure the element is visible
+      requestAnimationFrame(() => {
+        try {
+          textareaRef.value.focus();
+          // Position cursor at the end if there's text
+          if (userInput.value) {
+            const length = userInput.value.length;
+            textareaRef.value.setSelectionRange(length, length);
+          }
+        } catch (error) {
+          console.debug('Could not focus input (RAF):', error);
+        }
+      });
+    }
+  } catch (error) {
+    // Silently fail if focus is not possible (e.g., element not ready)
+    console.debug('Could not focus input:', error);
+  }
+};
+
+// NEW: Function to clear input and reset state
+const clearInput = () => {
+  userInput.value = '';
+  removeAttachedImage();
+  if (textareaRef.value) {
+    textareaRef.value.style.height = 'auto';
+    textareaRef.value.style.height = '44px';
+  }
 };
 
 // Auto-scroll to bottom when messages change
 watch(messages, async () => {
   await nextTick();
-  if (messagesAreaRef.value) {
-    messagesAreaRef.value.scrollTop = messagesAreaRef.value.scrollHeight;
-  }
+  scrollToBottom(true);
 }, { deep: true });
 
 // Load available threads for the current project
@@ -450,10 +611,14 @@ const loadAvailableThreads = async () => {
     const result = await window.electronAPI.listProjectChats(props.projectPath);
     console.log('listProjectChats result:', result);
     if (result.success) {
-      // Deduplicate threads by ID
+      // Deduplicate threads by ID and add names
       const seen = new Set();
+      const threadNamesMap = getThreadNamesMap(props.projectPath);
       let threads = result.threads
-        .map(id => ({ id }))
+        .map(id => ({ 
+          id,
+          name: threadNamesMap[id] || null
+        }))
         .filter(thread => {
           if (seen.has(thread.id)) return false;
           seen.add(thread.id);
@@ -511,6 +676,11 @@ const loadChatMessages = async (threadIdToLoad) => {
       toolExecutions.value = new Map();
       const toolStarts = loadedMessages.filter(m => m.role === 'tool' && m.toolPhase === 'start');
       console.log(`[CopilotChat Load] Found ${toolStarts.length} tool start messages.`);
+      
+      // Check if this chat needs a name after loading messages
+      setTimeout(() => {
+        checkAndGenerateChatName();
+      }, 100); // Small delay to ensure all state is updated
 
       for (const startMsg of toolStarts) {
         const originalToolId = startMsg.toolId || startMsg.tool_call_id;
@@ -579,7 +749,7 @@ const handleNewChat = async () => {
   expandedImages.value = {}; // Reset expansion state for new chat
   // Prevent duplicate threads
   if (!availableThreads.value.some(t => t.id === newId)) {
-    availableThreads.value.unshift({ id: newId });
+    availableThreads.value.unshift({ id: newId, name: null });
   }
   currentThreadId.value = newId;
   setThreadLastUsed(props.projectPath, newId);
@@ -591,7 +761,9 @@ const handleNewChat = async () => {
   messages.value = [];
   chatError.value = '';
   console.log('Created new chat with ID:', newId);
-  // Optionally, persist the new chat to backend here if needed
+  
+  // Focus the input after creating new chat
+  await focusInput();
 };
 
 // Handle selecting a different chat from the dropdown
@@ -605,6 +777,9 @@ const handleSelectChat = async () => {
       return (lastUsedMap[b.id] || 0) - (lastUsedMap[a.id] || 0);
     });
     await loadChatMessages(currentThreadId.value);
+    
+    // Focus the input after selecting chat
+    await focusInput();
   }
 };
 
@@ -630,6 +805,8 @@ const handleDeleteChat = async () => {
       if (availableThreads.value.length > 0) {
         currentThreadId.value = availableThreads.value[0].id;
         await loadChatMessages(currentThreadId.value);
+        // Focus the input after switching to new chat
+        await focusInput();
       } else {
         currentThreadId.value = null;
         messages.value = [];
@@ -689,18 +866,25 @@ const removeAttachedImage = () => {
 
 // Send message to backend
 const handleSendMessage = async () => {
+  // Validate message before sending
+  const validation = validateMessage();
+  if (!validation.valid) {
+    toast({
+      title: 'Cannot Send Message',
+      description: validation.message,
+      variant: 'destructive',
+      duration: 3000,
+    });
+    return;
+  }
+
+  if (!props.projectPath) {
+    console.log('Cannot send: Missing projectPath');
+    return;
+  }
+
   const userText = userInput.value.trim();
   const imageDataUrl = attachedImage.value.dataUrl;
-
-  // Require either text or an image
-  if (!userText && !imageDataUrl) {
-    console.log('Cannot send: Missing text or image');
-    return;
-  }
-  if (!currentThreadId.value || !props.projectPath) {
-    console.log('Cannot send: Missing threadId or projectPath');
-    return;
-  }
 
   console.log('handleSendMessage called', { 
     userInput: userText,
@@ -729,15 +913,12 @@ const handleSendMessage = async () => {
     content: userMessageContent,
     checkpointPath: messageCheckpointPath // Store the then-current latest checkpoint path
   });
-  userInput.value = '';
-  removeAttachedImage(); // Clear attached image after adding to message list
+  
+  // Clear input and reset state
+  clearInput();
+  
   isLoading.value = true;
   chatError.value = '';
-  
-  // Reset textarea height
-  if (textareaRef.value) {
-    textareaRef.value.style.height = 'auto';
-  }
 
   // Start streaming
   window.electronAPI.sendCopilotMessageStream(
@@ -759,6 +940,50 @@ const cancelStream = () => {
   // isLoading.value = false; 
 };
 
+// --- NEW: Retry Last Message Function ---
+const handleRetryLastMessage = async () => {
+  if (!canRetry.value || !currentThreadId.value || !props.projectPath) {
+    console.log('[CopilotChat] Cannot retry - conditions not met');
+    return;
+  }
+
+  const lastMessage = messages.value[messages.value.length - 1];
+  if (lastMessage.role !== 'user') {
+    console.log('[CopilotChat] Cannot retry - last message was not from user');
+    return;
+  }
+
+  console.log('[CopilotChat] Retrying last message');
+  
+  // Clear the error
+  chatError.value = '';
+  isLoading.value = true;
+
+  // Extract text content and image from the last message
+  let userText = '';
+  let imageDataUrl = null;
+
+  if (Array.isArray(lastMessage.content)) {
+    const textPart = lastMessage.content.find(part => part.type === 'text');
+    const imagePart = lastMessage.content.find(part => part.type === 'image_url');
+    userText = textPart?.text || '';
+    imageDataUrl = imagePart?.image_url?.url || null;
+  } else if (typeof lastMessage.content === 'string') {
+    userText = lastMessage.content;
+  }
+
+  // Retry the stream request
+  window.electronAPI.sendCopilotMessageStream(
+    userText,
+    currentThreadId.value,
+    props.projectPath,
+    props.selectedBoardFqbn,
+    props.selectedPortPath,
+    'gemini-2.5-flash-preview-05-20', // HARDCODED MODEL
+    imageDataUrl
+  );
+};
+
 // Load threads when component mounts or projectPath changes
 onMounted(async () => {
   // If threadId is provided and not present, create/select it before loading threads
@@ -773,7 +998,7 @@ onMounted(async () => {
     const found = availableThreads.value.find(t => t.id === props.threadId);
     if (!found) {
       // Create the thread
-      availableThreads.value.unshift({ id: props.threadId });
+      availableThreads.value.unshift({ id: props.threadId, name: null });
     }
     currentThreadId.value = props.threadId;
     usedThreadId = props.threadId;
@@ -821,10 +1046,13 @@ onMounted(async () => {
       props.homepageImageDataUrl // Pass image data URL
     );
 
-    // Clear localStorage key after sending
-    console.log('  Removing embedr-pending-ai-query from localStorage.');
-    localStorage.removeItem('embedr-pending-ai-query');
-  }
+          // Clear localStorage key after sending
+      console.log('  Removing embedr-pending-ai-query from localStorage.');
+      localStorage.removeItem('embedr-pending-ai-query');
+    } else {
+      // Focus input if no initial query but thread is ready
+      await focusInput();
+    }
 
   window.electronAPI.onCopilotChatStream((data) => {
     if (data.type === 'chunk_delta') {
@@ -836,7 +1064,8 @@ onMounted(async () => {
         }
       }
     } else if (data.type === 'tool_start') {
-      const toolId = `${data.name}-${Date.now()}`;
+      // Use the toolId from backend if provided, otherwise generate one
+      const toolId = data.toolId || `${data.name}-${Date.now()}`;
       toolExecutions.value.set(toolId, {
         name: data.name,
         loading: true,
@@ -855,8 +1084,16 @@ onMounted(async () => {
       
       isLoading.value = true;
     } else if (data.type === 'tool_end') {
-      const toolEntry = Array.from(toolExecutions.value.entries())
-        .find(([_, exec]) => exec.name === data.name && exec.loading);
+      // First try to find by exact toolId if provided
+      let toolEntry = null;
+      if (data.toolId && toolExecutions.value.has(data.toolId)) {
+        const execution = toolExecutions.value.get(data.toolId);
+        toolEntry = [data.toolId, execution];
+      } else {
+        // Fallback to finding by name and loading state (for backward compatibility)
+        toolEntry = Array.from(toolExecutions.value.entries())
+          .find(([_, exec]) => exec.name === data.name && exec.loading);
+      }
       
       if (toolEntry) {
         const [toolId, execution] = toolEntry;
@@ -874,9 +1111,16 @@ onMounted(async () => {
       
       isLoading.value = true;
     } else if (data.type === 'tool_error') {
-      // Find the matching tool execution
-      const toolEntry = Array.from(toolExecutions.value.entries())
-        .find(([_, exec]) => exec.name === data.name && exec.loading);
+      // First try to find by exact toolId if provided
+      let toolEntry = null;
+      if (data.toolId && toolExecutions.value.has(data.toolId)) {
+        const execution = toolExecutions.value.get(data.toolId);
+        toolEntry = [data.toolId, execution];
+      } else {
+        // Fallback to finding by name and loading state (for backward compatibility)
+        toolEntry = Array.from(toolExecutions.value.entries())
+          .find(([_, exec]) => exec.name === data.name && exec.loading);
+      }
       
       if (toolEntry) {
         const [toolId, execution] = toolEntry;
@@ -904,6 +1148,39 @@ onMounted(async () => {
         messages.value.push({ role: 'assistant', content: data.content });
       }
       isLoading.value = false;
+      
+      // NEW: Generate chat name if this is the first conversation in a chat
+      if (currentThreadId.value) {
+        const currentThread = availableThreads.value.find(t => t.id === currentThreadId.value);
+        console.log('[CopilotChat] Checking if chat name should be generated:', {
+          threadId: currentThreadId.value,
+          hasName: !!currentThread?.name,
+          messageCount: messages.value.length,
+          userMessages: messages.value.filter(m => m.role === 'user').length,
+          assistantMessages: messages.value.filter(m => m.role === 'assistant').length
+        });
+        
+        // Generate name if thread doesn't have one and we have both user and assistant messages
+        if (!currentThread?.name) {
+          const userMessages = messages.value.filter(m => m.role === 'user');
+          const assistantMessages = messages.value.filter(m => m.role === 'assistant');
+          
+          // Trigger generation when we have exactly one user message and one assistant message (first conversation)
+          if (userMessages.length === 1 && assistantMessages.length === 1) {
+            const firstUserMessage = userMessages[0];
+            const firstAssistantMessage = assistantMessages[0];
+            
+            console.log('[CopilotChat] Triggering chat name generation with full conversation context');
+            
+            // Generate chat name with both user and assistant messages
+            generateChatName(firstUserMessage.content, firstAssistantMessage.content).catch(console.error);
+          } else {
+            console.log('[CopilotChat] Not the right time for name generation - userMessages:', userMessages.length, 'assistantMessages:', assistantMessages.length);
+          }
+        } else {
+          console.log('[CopilotChat] Thread already has a name:', currentThread.name);
+        }
+      }
     } else if (data.type === 'error') {
       // Mark any loading tools as errored
       toolExecutions.value.forEach((execution, toolId) => {
@@ -931,6 +1208,11 @@ onMounted(async () => {
       fetchLatestProjectCheckpointPath();
     }
   });
+  
+  // Focus the input after initial setup (unless we're actively loading)
+  if (!isLoading.value) {
+    await focusInput();
+  }
 });
 
 onUnmounted(() => {
@@ -1200,6 +1482,109 @@ const fetchLatestProjectCheckpointPath = async () => {
   }
 };
 
+// Check if current chat needs a name and generate it if needed
+const checkAndGenerateChatName = () => {
+  if (!currentThreadId.value || !props.projectPath) return;
+  
+  const currentThread = availableThreads.value.find(t => t.id === currentThreadId.value);
+  console.log('[CopilotChat] Checking chat name generation need:', {
+    threadId: currentThreadId.value,
+    hasName: !!currentThread?.name,
+    messageCount: messages.value.length,
+    userMessages: messages.value.filter(m => m.role === 'user').length,
+    assistantMessages: messages.value.filter(m => m.role === 'assistant').length
+  });
+  
+  // Only generate if no name exists and we have conversation
+  if (!currentThread?.name) {
+    const userMessages = messages.value.filter(m => m.role === 'user');
+    const assistantMessages = messages.value.filter(m => m.role === 'assistant');
+    
+    if (userMessages.length === 1 && assistantMessages.length === 1) {
+      const firstUserMessage = userMessages[0];
+      const firstAssistantMessage = assistantMessages[0];
+      
+      console.log('[CopilotChat] Triggering deferred chat name generation with full context');
+      generateChatName(firstUserMessage.content, firstAssistantMessage.content).catch(console.error);
+    }
+  }
+};
+
+// NEW: Generate chat name for first conversation (user query + LLM response)
+const generateChatName = async (userMessage, assistantResponse) => {
+  if (!props.projectPath || !currentThreadId.value) {
+    console.log('[CopilotChat] Cannot generate chat name - missing projectPath or currentThreadId');
+    return;
+  }
+  
+  try {
+    isGeneratingName.value = true;
+    console.log('[CopilotChat] Generating chat name with conversation context...');
+    
+    // Extract text content from user message (handle both string and multimodal content)
+    let userText = '';
+    if (Array.isArray(userMessage)) {
+      const textPart = userMessage.find(part => part.type === 'text');
+      userText = textPart?.text || '';
+    } else if (typeof userMessage === 'string') {
+      userText = userMessage;
+    }
+    
+    // Clean the assistant response (remove any context markers)
+    let cleanAssistantResponse = assistantResponse || '';
+    const queryMarker = 'USER QUERY:\n';
+    const markerIndex = cleanAssistantResponse.indexOf(queryMarker);
+    if (markerIndex !== -1) {
+      cleanAssistantResponse = cleanAssistantResponse.substring(markerIndex + queryMarker.length);
+    }
+    
+    const result = await window.electronAPI.invokeFirebaseFunction('generateChatName', {
+      message: userText.substring(0, 500) // Limit length for API efficiency - Firebase function expects 'message' field
+    });
+    
+    if (result.success && result.data && result.data.chatName) {
+      const chatName = result.data.chatName;
+      console.log('[CopilotChat] Generated chat name:', chatName);
+      
+      // Store the name in localStorage
+      setThreadName(props.projectPath, currentThreadId.value, chatName);
+      
+      // Update the current thread in availableThreads with better reactivity
+      const threadIndex = availableThreads.value.findIndex(t => t.id === currentThreadId.value);
+      if (threadIndex !== -1) {
+        console.log('[CopilotChat] Updating thread name at index', threadIndex, 'to:', chatName);
+        
+        // Create a completely new array to ensure Vue detects the change
+        const newThreads = [...availableThreads.value];
+        newThreads[threadIndex] = {
+          ...newThreads[threadIndex],
+          name: chatName
+        };
+        availableThreads.value = newThreads;
+        
+        // Also trigger a manual reactive update
+        await nextTick();
+        console.log('[CopilotChat] Thread name updated successfully');
+      } else {
+        console.warn('[CopilotChat] Could not find thread index for ID:', currentThreadId.value);
+      }
+      
+      toast({
+        title: 'Chat Named',
+        description: `Chat named: "${chatName}"`,
+        duration: 2000,
+      });
+    } else {
+      console.warn('[CopilotChat] Failed to generate chat name:', result.error || 'Unknown error');
+    }
+  } catch (error) {
+    console.error('[CopilotChat] Error generating chat name:', error);
+    // Don't show error to user as this is not critical functionality
+  } finally {
+    isGeneratingName.value = false;
+  }
+};
+
 // Expose the method for EditorPage to call
 defineExpose({
   sendMessageFromEditor
@@ -1258,6 +1643,78 @@ async function sendMessageFromEditor(errorMessage) {
     imageToSend
   );
 }
+
+// NEW: Handle keyboard shortcuts
+const handleKeyDown = (event) => {
+  // Cmd/Ctrl + Enter to send message
+  if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+    event.preventDefault();
+    handleSendMessage();
+    return;
+  }
+  
+  // Escape to clear input
+  if (event.key === 'Escape' && userInput.value.trim()) {
+    event.preventDefault();
+    clearInput();
+    return;
+  }
+  
+  // Enter without shift to send (only if not disabled)
+  if (event.key === 'Enter' && !event.shiftKey && !event.metaKey && !event.ctrlKey) {
+    event.preventDefault();
+    handleSendMessage();
+    return;
+  }
+};
+
+// NEW: Enhanced error handling with user-friendly messages
+const getErrorMessage = (error) => {
+  if (typeof error === 'string') {
+    if (error.includes('429') || error.includes('Too Many Requests')) {
+      return 'Rate limit exceeded. Please wait a moment before trying again.';
+    }
+    if (error.includes('Connection error') || error.includes('Network')) {
+      return 'Network connection error. Please check your internet connection.';
+    }
+    if (error.includes('CHAT_CONTEXT_TOO_LONG') || error.includes('413')) {
+      return 'This conversation has become too long. Please start a new chat.';
+    }
+    return error;
+  }
+  return 'An unexpected error occurred. Please try again.';
+};
+
+// NEW: Function to handle scroll to bottom with smooth behavior
+const scrollToBottom = (smooth = true) => {
+  if (messagesAreaRef.value) {
+    messagesAreaRef.value.scrollTo({
+      top: messagesAreaRef.value.scrollHeight,
+      behavior: smooth ? 'smooth' : 'auto'
+    });
+  }
+};
+
+// NEW: Enhanced message validation
+const validateMessage = () => {
+  const hasText = userInput.value.trim().length > 0;
+  const hasImage = attachedImage.value.dataUrl;
+  const isReady = currentThreadId.value && !isLoading.value;
+  
+  if (!isReady) {
+    return { valid: false, message: 'Please select or create a chat first.' };
+  }
+  
+  if (!hasText && !hasImage) {
+    return { valid: false, message: 'Please enter a message or attach an image.' };
+  }
+  
+  if (userInput.value.length > 10000) {
+    return { valid: false, message: 'Message is too long. Please keep it under 10,000 characters.' };
+  }
+  
+  return { valid: true };
+};
 </script>
 
 <style scoped>
@@ -1605,5 +2062,76 @@ async function sendMessageFromEditor(errorMessage) {
 :deep(.prose-invert .footnote-backref) {
   font-size: 0.8em;
   margin-left: 0.3em;
+}
+
+/* Scrollbar styling for textarea */
+textarea::-webkit-scrollbar {
+  width: 6px;
+}
+
+textarea::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+textarea::-webkit-scrollbar-thumb {
+  background-color: #4b5563;
+  border-radius: 3px;
+}
+
+textarea::-webkit-scrollbar-thumb:hover {
+  background-color: #6b7280;
+}
+
+/* Firefox scrollbar styling */
+textarea {
+  scrollbar-width: thin;
+  scrollbar-color: #4b5563 transparent;
+}
+
+/* Additional textarea styling for better large text handling */
+textarea {
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  white-space: pre-wrap;
+  line-height: 1.5;
+  transition: height 0.1s ease;
+}
+
+.bottom-3 {
+  bottom: 0.85rem;
+}
+
+/* Send button hover effects and positioning */
+.absolute.bottom-3.right-3 button {
+  backdrop-filter: blur(8px);
+  background: rgba(30, 30, 30, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.absolute.bottom-3.right-3 button:hover {
+  background: rgba(46, 46, 46, 0.9);
+  border-color: rgba(255, 255, 255, 0.2);
+  transform: scale(1.05);
+}
+
+.absolute.bottom-3.right-3 button:disabled {
+  opacity: 0.5;
+  transform: none;
+  background: rgba(30, 30, 30, 0.5);
+}
+
+/* Better focus states */
+textarea:focus {
+  outline: 2px solid rgba(96, 165, 250, 0.5);
+  outline-offset: -2px;
+}
+
+/* Smooth transitions for all interactive elements */
+button, textarea {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 </style> 

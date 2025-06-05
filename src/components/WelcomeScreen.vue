@@ -29,7 +29,15 @@
               class="mt-0.5 rounded border-[#3A3A3C] bg-[#323234] text-[#0A84FF] focus:ring-[#0A84FF]/20"
             >
             <span class="text-[#EBEBF5]/80 group-hover:text-[#EBEBF5] transition-colors">
-              I accept the terms and conditions for Embedr Services
+              I accept the 
+              <a 
+                href="#" 
+                @click.prevent="openLegalPage" 
+                class="text-[#0A84FF] hover:text-[#409CFF] underline transition-colors"
+              >
+                terms and conditions
+              </a> 
+              for Embedr Services
             </span>
           </label>
         </div>
@@ -74,6 +82,16 @@ function handleConfirm() {
   }))
   
   emit('confirmed')
+}
+
+function openLegalPage() {
+  // Open the legal page in the user's default browser
+  if (window.electronAPI && window.electronAPI.openExternal) {
+    window.electronAPI.openExternal('https://www.embedr.cc/legal')
+  } else {
+    // Fallback for development or if electronAPI is not available
+    window.open('https://www.embedr.cc/legal', '_blank')
+  }
 }
 </script>
 

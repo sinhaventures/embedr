@@ -100,9 +100,10 @@
           variant="default" 
           class="relative group"
           @click="handleUpload" 
-          :disabled="compiling || !currentInoPath || !selectedBoard || !selectedPort"
+          :disabled="compiling || uploading || !currentInoPath || !selectedBoard || !selectedPort"
           aria-label="Upload"
         >
+          <span v-if="uploading" class="animate-spin mr-2 w-4 h-4 inline-block border-2 border-t-transparent border-current rounded-full"></span>
           Upload
           <span class="absolute left-1/2 -translate-x-1/2 top-full mt-2 px-2 py-1 rounded bg-black text-white text-xs opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-10 shadow-lg">
             {{ isMac ? 'Cmd' : 'Ctrl' }}+U
@@ -151,55 +152,99 @@
     />
     <!-- Board Options Modal -->
     <Dialog :open="showBoardOptionsModal" @update:open="showBoardOptionsModal = $event">
-      <DialogContent class="sm:max-w-[500px] h-[85vh] flex flex-col bg-[#1C1C1E]/90 backdrop-blur-xl border-[#323234] shadow-2xl">
-        <DialogHeader class="flex-shrink-0 px-6 pt-6">
-          <DialogTitle class="text-2xl font-medium tracking-tight">Board Configuration</DialogTitle>
-          <DialogDescription class="text-[#86868B] mt-2">
-            Adjust options for {{ selectedBoardName || 'selected board' }}.
+      <DialogContent class="sm:max-w-[600px] max-h-[80vh] overflow-hidden flex flex-col bg-[#1E1E1E]" style="background-color: #1E1E1E !important;">
+        <DialogHeader class="px-6 pt-6 pb-4 border-b border-[#333]">
+          <DialogTitle class="flex items-center text-white/90">
+            <svg xmlns="http://www.w3.org/2000/svg" class="mr-2 h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+              <line x1="8" y1="21" x2="16" y2="21"></line>
+              <line x1="12" y1="17" x2="12" y2="21"></line>
+            </svg>
+            Board Configuration
+          </DialogTitle>
+          <DialogDescription class="text-white/60">
+            Adjust configuration options for {{ selectedBoardName || 'selected board' }}
           </DialogDescription>
         </DialogHeader>
         
-        <div class="flex-1 overflow-y-auto px-6 py-6 space-y-6 custom-scrollbar">
-          <div v-for="(options, key) in boardConfigOptions" :key="key" class="space-y-2">
-            <label class="text-sm font-medium text-[#86868B]">
-              {{ getOptionLabel(key) }}
-            </label>
-            <Select 
-              v-model="selectedBoardOptions[key]"
-              :disabled="!options || options.length === 0"
-            >
-              <SelectTrigger class="w-full bg-[#2C2C2E] border-[#323234] focus:ring-[#0A84FF] focus:ring-offset-0">
-                <SelectValue :placeholder="`Select ${getOptionLabel(key)}`" />
-              </SelectTrigger>
-              <SelectContent class="bg-[#2C2C2E] border-[#323234]">
-                <SelectItem 
-                  v-for="option in options" 
-                  :key="option.value" 
-                  :value="option.value"
-                  class="text-[#FAFAFA] hover:bg-[#3A3A3C] focus:bg-[#3A3A3C]"
+        <div class="flex-1 overflow-y-auto pb-2 px-6 pt-4 space-y-4 custom-scrollbar">
+          <div v-if="Object.keys(boardConfigOptions).length === 0" class="py-8 text-center text-white/60">
+            <svg xmlns="http://www.w3.org/2000/svg" class="mx-auto h-10 w-10 text-white/30 mb-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+              <line x1="8" y1="21" x2="16" y2="21"></line>
+              <line x1="12" y1="17" x2="12" y2="21"></line>
+            </svg>
+            <p class="text-sm">No configuration options available</p>
+            <p class="text-xs text-white/50 mt-1">This board uses default settings.</p>
+          </div>
+
+          <div v-else class="space-y-4">
+            <div v-for="(options, key) in boardConfigOptions" :key="key" class="border border-[#333] bg-[#252525] rounded-md overflow-hidden p-4" style="background-color: #252525 !important; border-color: #333 !important;">
+              <div class="space-y-3">
+                <div class="flex items-center justify-between">
+                  <h4 class="font-medium text-sm text-white/90">{{ getOptionLabel(key) }}</h4>
+                  <span class="text-xs text-white/50 bg-[#333] px-2 py-1 rounded">{{ key }}</span>
+                </div>
+                <Select 
+                  v-model="selectedBoardOptions[key]"
+                  :disabled="!options || options.length === 0"
                 >
-                  {{ option.label }}
-                </SelectItem>
-              </SelectContent>
-            </Select>
+                  <SelectTrigger class="w-full bg-[#1E1E1E] border-[#333] focus:ring-[#5B8EFF] focus:ring-offset-0 text-white/90" style="background-color: #1E1E1E !important; border-color: #333 !important;">
+                    <SelectValue :placeholder="`Select ${getOptionLabel(key)}`" />
+                  </SelectTrigger>
+                  <SelectContent class="bg-[#252525] border-[#333]" style="background-color: #252525 !important; border-color: #333 !important;">
+                    <SelectItem 
+                      v-for="option in options" 
+                      :key="option.value" 
+                      :value="option.value"
+                      class="text-white/90 hover:bg-[#333] focus:bg-[#333]"
+                    >
+                      <div class="flex flex-col">
+                        <span class="text-sm">{{ option.label }}</span>
+                        <span v-if="option.value !== option.label" class="text-xs text-white/50">{{ option.value }}</span>
+                      </div>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+                <p v-if="options && options.length > 0" class="text-xs text-white/50">
+                  {{ options.length }} option{{ options.length !== 1 ? 's' : '' }} available
+                </p>
+              </div>
+            </div>
+
+            <!-- Info Section -->
+            <div class="p-3 bg-blue-900/20 border border-blue-700/50 rounded-md text-sm text-blue-400">
+              <div class="flex items-start gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mt-0.5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <path d="M12 16v-4"></path>
+                  <path d="M12 8h.01"></path>
+                </svg>
+                <div class="space-y-1">
+                  <p class="font-medium">Configuration Notes:</p>
+                  <ul class="space-y-1 text-xs">
+                    <li>• These settings affect compilation and upload behavior</li>
+                    <li>• Changes are saved automatically and persist across sessions</li>
+                    <li>• Some options may require specific hardware variants</li>
+                    <li>• Incorrect settings may prevent successful uploads</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
-        <DialogFooter class="flex-shrink-0 sm:justify-between border-t border-[#323234] px-6 py-4">
-          <DialogClose asChild>
-            <Button variant="secondary" class="bg-[#2C2C2E] hover:bg-[#3A3A3C] border-[#323234] text-[#FAFAFA]">
-              Cancel
-            </Button>
-          </DialogClose>
-          <DialogClose asChild>
-            <Button 
-              type="submit" 
-              class="bg-[#0A84FF] hover:bg-[#0A84FF]/90 text-white border-none"
-              @click="handleBoardOptionsSubmit"
-            >
-              Save Changes
-            </Button>
-          </DialogClose>
+        <DialogFooter class="px-6 py-4 mt-auto border-t border-[#333]">
+          <Button variant="secondary" @click="showBoardOptionsModal = false" class="border-[#444] hover:border-[#666] hover:bg-[#333] text-white/80">
+            Cancel
+          </Button>
+          <Button 
+            type="submit" 
+            @click="handleBoardOptionsSubmit"
+            class="bg-[#5B8EFF] hover:bg-[#5B8EFF]/90 text-white border-none"
+          >
+            Save Configuration
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -395,6 +440,7 @@ const currentProject = ref(null)
 const currentInoPath = ref('')
 const isDirty = ref(false)
 const compiling = ref(false)
+const uploading = ref(false)
 const boards = ref([])
 const ports = ref([])
 const boardSearch = ref('')
@@ -614,7 +660,7 @@ const setupIPCListeners = () => {
         console.log(`[Listener] EditorPage received show-agent-cli-output with data length: ${output?.length}`);
         if (output && typeof output === 'string') {
           // Replace the entire output instead of appending
-          buildOutput.value = "--- Agent Action Output ---\n" + output + "\n--- End Agent Action Output ---\n"; 
+          buildOutput.value = output; 
           activeTab.value = 'output'; // Switch to output tab
           // Scroll to bottom
           nextTick(() => {
@@ -1213,8 +1259,8 @@ async function handleCompile() {
 }
 
 async function handleUpload() {
-  if (compiling.value) return;
-  compiling.value = true;
+  if (compiling.value || uploading.value) return;
+  uploading.value = true;
   activeTab.value = 'output';
   compileStatus.value = null;
   buildOutput.value = 'Starting build and upload process...\n';
@@ -1227,8 +1273,13 @@ async function handleUpload() {
   if (!sketchPath || !baseFqbn || !port) {
     buildOutput.value += 'Error: Please select a board, port, and open a project.\n';
     compileStatus.value = 'error';
-    compiling.value = false;
+    uploading.value = false;
     return;
+  }
+
+  // Warn about potentially problematic ports
+  if (port.includes('Bluetooth') || port.includes('bluetooth')) {
+    buildOutput.value += 'Warning: Selected port appears to be a Bluetooth port. Please ensure you have selected the correct physical USB port for your Arduino.\n\n';
   }
 
   await saveCurrentCode();
@@ -1303,7 +1354,7 @@ async function handleUpload() {
           monacoEditorRef.value.setErrorLines(errorLines);
         }
       }
-      compiling.value = false;
+      uploading.value = false;
       return;
     }
 
@@ -1332,9 +1383,25 @@ async function handleUpload() {
     }
     compileStatus.value = 'success';
 
-    // --- Upload Step (remains the same) ---
+    // --- Upload Step ---
     buildOutput.value += `\n\nAttempting to upload to ${port} using board ${fullFqbnFromParts(baseFqbn, options)}...\n`;
+    
+    // Add a progress indicator for long upload operations
+    const uploadProgressInterval = setInterval(() => {
+      if (uploading.value) {
+        buildOutput.value += '.';
+        // Auto-scroll to bottom if container exists
+        nextTick(() => {
+          if (outputContainerRef.value) {
+            outputContainerRef.value.scrollTop = outputContainerRef.value.scrollHeight;
+          }
+        });
+      }
+    }, 2000); // Add a dot every 2 seconds to show it's working
+    
     const uploadResult = await window.electronAPI.uploadSketch(baseFqbn, options, port, sketchPath);
+    clearInterval(uploadProgressInterval);
+    buildOutput.value += '\n'; // New line after progress dots
 
     if (uploadResult.details) {
       buildOutput.value += `\n[Uploader Command Executed]\n${uploadResult.details.trim()}\n`;
@@ -1366,10 +1433,11 @@ async function handleUpload() {
       compileStatus.value = 'error';
     }
   } catch (e) {
+    clearInterval(uploadProgressInterval); // Clean up interval on error
     buildOutput.value += '\n\nUnexpected error during operation: ' + e.message + '\n';
     compileStatus.value = 'error';
   } finally {
-    compiling.value = false;
+    uploading.value = false;
   }
 }
 
@@ -1920,7 +1988,7 @@ function toggleAutoScroll() {
 
 .custom-scrollbar {
   scrollbar-width: thin;
-  scrollbar-color: #3A3A3C #1C1C1E;
+  scrollbar-color: #333 #1E1E1E;
 }
 
 .custom-scrollbar::-webkit-scrollbar {
@@ -1928,16 +1996,16 @@ function toggleAutoScroll() {
 }
 
 .custom-scrollbar::-webkit-scrollbar-track {
-  background: #1C1C1E;
+  background: #1E1E1E;
   border-radius: 4px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #3A3A3C;
+  background: #333;
   border-radius: 4px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: #48484A;
+  background: #404040;
 }
 </style> 

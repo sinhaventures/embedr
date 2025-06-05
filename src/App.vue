@@ -4,15 +4,7 @@
     <div v-else class="flex items-center justify-center min-h-screen">
       <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-white/90"></div>
     </div>
-    <UpdateNotification 
-      :visible="updateStore.updateAvailable.value" 
-      :version="updateStore.newVersion.value"
-      :release-notes="updateStore.releaseNotes.value" 
-      :is-manual-download="updateStore.isManualDownload.value"
-      :platform="platform"
-      @install="handleInstallUpdate"
-      @dismiss="handleDismissUpdate"
-    />
+
   </div>
 </template>
 
@@ -21,20 +13,13 @@ import { useAuth } from './composables/useAuth'
 import { useRouter, useRoute } from 'vue-router'
 import { watch, onMounted, onBeforeUnmount, ref, computed } from 'vue'
 import { getAuth, onIdTokenChanged } from 'firebase/auth'
-import UpdateNotification from './components/UpdateNotification.vue';
-import { useUpdateStore } from './composables/useUpdateStore';
 
 const { isLoading, user } = useAuth()
 const router = useRouter()
 const route = useRoute()
-const updateStore = useUpdateStore();
-const platform = ref(window.electronAPI?.platform || 'unknown');
 
 let unsubscribeTokenListener = null
 let unsubscribeRequestAuthToken = null
-let unsubscribeUpdateAvailable = null;
-let unsubscribeUpdateDownloaded = null;
-let unsubscribeUpdateError = null;
 
 async function sendTokenToMain(currentUser) {
   if (currentUser && window.electronAPI?.setFirebaseAuthToken) {
@@ -79,42 +64,12 @@ onMounted(() => {
     })
   }
 
-  if (window.electronAPI?.onUpdateAvailable) {
-    const unsub = window.electronAPI.onUpdateAvailable((updateDetails) => {
-      console.log('[App.vue] Received update-available from main:', updateDetails);
-      updateStore.showUpdateNotification(updateDetails);
-    });
-    if (typeof unsub === 'function') unsubscribeUpdateAvailable = unsub;
-  }
 
-  if (window.electronAPI?.onUpdateDownloaded) {
-    const unsub = window.electronAPI.onUpdateDownloaded((updateDetails) => {
-      console.log('[App.vue] Received update-downloaded from main:', updateDetails);
-      updateStore.showUpdateNotification(updateDetails);
-    });
-    if (typeof unsub === 'function') unsubscribeUpdateDownloaded = unsub;
-  }
-  
-  if (window.electronAPI?.onUpdateError) {
-    const unsub = window.electronAPI.onUpdateError((errorMsg) => {
-      console.error('[App.vue] Received update-error from main:', errorMsg);
-      updateStore.hideUpdateNotification();
-    });
-    if (typeof unsub === 'function') unsubscribeUpdateError = unsub;
-  }
 })
 
 onBeforeUnmount(() => {
   if (unsubscribeTokenListener) unsubscribeTokenListener();
   if (unsubscribeRequestAuthToken) unsubscribeRequestAuthToken();
-  
-  if (window.electronAPI?.removeAllUpdateListeners) {
-    window.electronAPI.removeAllUpdateListeners();
-  } else {
-    if (unsubscribeUpdateAvailable) unsubscribeUpdateAvailable();
-    if (unsubscribeUpdateDownloaded) unsubscribeUpdateDownloaded();
-    if (unsubscribeUpdateError) unsubscribeUpdateError();
-  }
 })
 
 watch([isLoading, user, route], ([loading, currentUser, currentRoute]) => {
@@ -124,26 +79,7 @@ watch([isLoading, user, route], ([loading, currentUser, currentRoute]) => {
   }
 })
 
-const handleInstallUpdate = () => {
-  console.log('[App.vue] User clicked install/download action.');
-  if (platform.value === 'darwin' && updateStore.isManualDownload.value) {
-    console.log('[App.vue] macOS manual download: Opening external URL.');
-    if (window.electronAPI?.openManualDownloadUrl) {
-      window.electronAPI.openManualDownloadUrl();
-    }
-  } else {
-    console.log('[App.vue] Non-macOS or auto-download: Triggering quit and install.');
-    if (window.electronAPI?.quitAndInstallUpdate) {
-      window.electronAPI.quitAndInstallUpdate();
-    }
-  }
-  updateStore.hideUpdateNotification();
-};
 
-const handleDismissUpdate = () => {
-  console.log('[App.vue] User dismissed update notification.');
-  updateStore.hideUpdateNotification();
-};
 
 </script>
 

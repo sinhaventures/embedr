@@ -14,7 +14,7 @@
             <span :class="{ 'text-gray-400': displayedPlanName === 'Pro', 'text-gray-400': displayedPlanName === 'Free' }">{{ displayedPlanName }}</span>
             <span>•</span>
             <a href="#" @click.prevent="showSettings = true"
-              class="text-blue-400 hover:text-blue-500 transition-colors">Settings</a>
+              class="text-red-300 hover:text-red-400 transition-colors">Settings</a>
           </div>
         </div>
       </div>
@@ -163,7 +163,7 @@
             {{ suggestion.name }}
           </button>
           <button v-if="suggestions.length > 3" @click="showAllIdeas = !showAllIdeas"
-            class="ml-2 px-3 py-2 rounded-lg bg-[#232323] border border-white/10 text-sm text-blue-400 hover:bg-[#252525] transition-colors">
+            class="ml-2 px-3 py-2 rounded-lg bg-[#232323] border border-white/10 text-sm text-red-300 hover:text-red-400 hover:bg-[#252525] transition-colors">
             {{ showAllIdeas ? 'Show Less' : 'More Ideas' }}
           </button>
         </div>
@@ -179,20 +179,15 @@
             </svg>
             <span class="group-hover:text-gray-300 transition-colors">Create Blank Project</span>
           </button>
-          <div class="flex-1 border-t border-white/10"></div>
-        </div>
-
-        <!-- Arduino Core Manager Button -->
-        <div class="mt-6 flex justify-center">
           <button @click="showCoreManagerModal = true"
-            class="flex items-center gap-2 px-4 py-2 bg-[#1A1A1A] rounded-lg border border-white/10 text-sm text-gray-300 hover:bg-[#252525] transition-colors">
+            class="flex items-center gap-2 px-4 py-2 bg-[#1A1A1A] rounded-lg border hover:bg-[#252525] transition-colors">
             <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none"
               stroke="currentColor" stroke-width="2">
               <path stroke-linecap="round" stroke-linejoin="round" d="M4 7h16M4 12h16M4 17h16" />
             </svg>
-            Manage Arduino Cores
-            <span class="ml-1 px-1.5 py-0.5 bg-blue-900/30 text-blue-400 rounded text-xs">Beta</span>
+            Manage Arduino Boards
           </button>
+          <div class="flex-1 border-t border-white/10"></div>
         </div>
       </div>
 
@@ -225,17 +220,27 @@
         <ul class="space-y-1">
           <li v-for="project in sortedProjects" :key="project.dir">
             <div
-              class="w-full flex items-center justify-between px-4 py-2 rounded-lg hover:bg-white/5 transition-colors text-sm cursor-pointer"
+              class="w-full flex items-center justify-between px-4 py-2 rounded-lg hover:bg-white/5 transition-colors text-sm cursor-pointer group"
               @click="() => openProject(project)">
-              <div class="flex items-center gap-3">
+              <div class="flex items-center gap-3 flex-1 min-w-0">
                 <span class="font-medium">{{ project.name }}</span>
-                <span class="text-white/40">{{ project.dir }}</span>
+                <span class="text-white/40 truncate">{{ project.dir }}</span>
               </div>
-              <div class="flex items-center gap-2">
+              <div class="flex items-center gap-2 ml-4 shrink-0">
                 <span class="text-white/40">{{ new Date(project.created).toLocaleDateString() }}</span>
-                <button @click.stop="() => handleDeleteProject(project)" class="ml-2 text-red-400 hover:text-red-600"
+                <button @click.stop="() => handleEditProject(project)" 
+                  class="p-1 text-blue-300 hover:text-blue-400 rounded transition-colors"
+                  title="Rename project">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="none" viewBox="0 0 24 24"
+                    stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round"
+                      d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                </button>
+                <button @click.stop="() => handleDeleteProject(project)" 
+                  class="p-1 text-red-300 hover:text-red-400 rounded transition-colors"
                   title="Delete project">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24"
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="none" viewBox="0 0 24 24"
                     stroke="currentColor" stroke-width="2">
                     <path stroke-linecap="round" stroke-linejoin="round"
                       d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m6-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -252,19 +257,57 @@
         class="fixed inset-0 flex items-center justify-center bg-black/50 backdrop-blur-sm z-50">
         <div class="bg-[#2D2D2D] rounded-xl shadow-xl p-6 w-[400px]">
           <h3 class="text-lg font-semibold mb-4">Create New Project</h3>
-          <input v-model="newProjectName" placeholder="Project name"
-            class="w-full px-3 py-2 bg-[#1E1E1E] border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-white/20 text-sm"
-            @keydown.enter="createBlankProject" ref="newProjectNameInput" />
+          <div class="relative">
+            <input v-model="newProjectName" placeholder="Project name"
+              class="w-full px-3 py-2 bg-[#1E1E1E] border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-white/20 text-sm"
+              @keydown.enter="createBlankProject" ref="newProjectNameInput" 
+              :disabled="isGeneratingProjectName" />
+            <div v-if="isGeneratingProjectName" class="absolute right-3 top-1/2 transform -translate-y-1/2">
+              <svg class="animate-spin h-4 w-4 text-white/60" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+              </svg>
+            </div>
+          </div>
           <div class="flex gap-3 mt-6">
-            <Button @click="createBlankProject" class="flex-1 bg-white/10 hover:bg-white/20 text-white border-none">
-              Create Project
+            <Button @click="createBlankProject" 
+              class="flex-1 bg-white/10 hover:bg-white/20 text-white border-none"
+              :disabled="isGeneratingProjectName">
+              {{ isGeneratingProjectName ? 'Generating Name...' : 'Create Project' }}
             </Button>
             <Button @click="showCreateModal = false" variant="outline"
-              class="flex-1 border-white/10 text-white/90 hover:bg-white/5">
+              class="flex-1 border-white/10 text-white/90 hover:bg-white/5"
+              :disabled="isGeneratingProjectName">
               Cancel
             </Button>
           </div>
           <div v-if="createError" class="mt-3 text-sm text-red-400">{{ createError }}</div>
+        </div>
+      </div>
+
+      <!-- Edit Project Modal -->
+      <div v-if="showEditProjectModal"
+        class="fixed inset-0 flex items-center justify-center bg-black/50 backdrop-blur-sm z-50">
+        <div class="bg-[#2D2D2D] rounded-xl shadow-xl p-6 w-[400px]">
+          <h3 class="text-lg font-semibold mb-4">Rename Project</h3>
+          <input v-model="editProjectName" placeholder="Project name"
+            class="w-full px-3 py-2 bg-[#1E1E1E] border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-white/20 text-sm"
+            @keydown.enter="updateProjectName" ref="editProjectNameInput" />
+          <div class="flex gap-3 mt-6">
+            <Button @click="updateProjectName" class="flex-1 bg-white/10 hover:bg-white/20 text-white border-none">
+              Update Name
+            </Button>
+            <Button @click="showEditProjectModal = false" variant="outline"
+              class="flex-1 border-white/10 text-white/90 hover:bg-white/5">
+              Cancel
+            </Button>
+          </div>
+          <div v-if="editProjectError" class="mt-3 text-sm text-red-400">
+            {{ editProjectError }}
+            <span v-if="editProjectError.includes('not available')" class="block mt-1 text-xs text-red-300">
+              Project name update is not available.
+            </span>
+          </div>
         </div>
       </div>
 
@@ -278,7 +321,7 @@
         :is-manage-subscription-loading="authRedirect.isLoading.value"
       />
 
-      <!-- Core Manager Modal -->
+      <!-- Board Manager Modal -->
       <CoreManagerModal :show="showCoreManagerModal" @close="showCoreManagerModal = false" />
     </div>
   </div>
@@ -312,7 +355,11 @@ const boardSearch = ref('');
 
 const displayedPlanName = computed(() => {
   if (isLoadingSubscription.value) return '...'; // Or some loading indicator
-  if (subscription.value?.planId === 'pro' && subscription.value?.status === 'active') {
+  const planId = subscription.value?.planId;
+  const status = subscription.value?.status;
+  const isProPlan = planId === 'pro_monthly' || planId === 'pro_yearly' || planId === 'pro'; // Include legacy 'pro' for compatibility
+  const isValidStatus = status === 'active' || status === 'authenticated'; // Based on your subscription guide
+  if (isProPlan && isValidStatus) {
     return 'Pro';
   }
   return 'Free';
@@ -334,6 +381,10 @@ const promptTextarea = ref(null)
 const recentProjects = ref([])
 const showCreateModal = ref(false)
 const showSettings = ref(false)
+const showEditProjectModal = ref(false)
+const editingProject = ref(null)
+const editProjectName = ref('')
+const editProjectError = ref('')
 const newProjectName = ref('')
 const createError = ref('')
 const pendingAIPrompt = ref(null); // Store AI prompt object (text + image)
@@ -341,13 +392,19 @@ const showAllProjects = ref(false);
 const showAllIdeas = ref(false);
 const projectSortBy = ref('lastOpened')
 const newProjectNameInput = ref(null)
+const editProjectNameInput = ref(null)
 const fileInputRef = ref(null) // Ref for hidden file input
 const attachedImage = ref({ name: null, type: null, dataUrl: null }); // Ref for attached image
 const isDraggingOver = ref(false); // State for drag-over visual feedback
 const showCoreManagerModal = ref(false);
+const isGeneratingProjectName = ref(false);
 
 const isProUser = computed(() => {
-  return subscription.value?.planId === 'pro' && subscription.value?.status === 'active';
+  const planId = subscription.value?.planId;
+  const status = subscription.value?.status;
+  const isProPlan = planId === 'pro_monthly' || planId === 'pro_yearly' || planId === 'pro'; // Include legacy 'pro' for compatibility
+  const isValidStatus = status === 'active' || status === 'authenticated'; // Based on your subscription guide
+  return isProPlan && isValidStatus;
 });
 
 // Helper function to extract Board Name from the combined label (copied from EditorPage)
@@ -422,39 +479,39 @@ function autoResizeTextarea() {
 const suggestions = [
   {
     name: 'Weather Station',
-    prompt: 'Build a weather station that displays temperature and humidity on an LCD screen using a DHT22 sensor and Arduino Uno.'
+    prompt: 'Build a weather station that displays temperature and humidity on an LCD screen using a temperature and humidity sensor.'
   },
   {
     name: 'Smart Plant Watering',
-    prompt: 'Create a smart plant watering system that automatically waters a plant when soil moisture is low, and sends notifications via an ESP8266.'
+    prompt: 'Create a smart plant watering system that automatically waters a plant when soil moisture is low, with notifications.'
   },
   {
     name: 'Home Security System',
-    prompt: 'Design a home security system with a PIR motion sensor, buzzer alarm, and SMS alerts using Arduino and a GSM module.'
+    prompt: 'Design a home security system with a motion sensor, buzzer alarm, and notifications.'
   },
   {
     name: 'Bluetooth Robot Car',
-    prompt: 'Develop a Bluetooth-controlled robot car using Arduino and an L298N motor driver.'
+    prompt: 'Develop a Bluetooth-controlled robot car with motor control.'
   },
   {
     name: 'Digital Thermometer',
-    prompt: 'Make a digital thermometer with a DS18B20 sensor and display the temperature on a 7-segment display.'
+    prompt: 'Make a digital thermometer with a temperature sensor and display the temperature on a 7-segment display.'
   },
   {
     name: 'RFID Door Lock',
-    prompt: 'Implement a simple RFID-based door lock system using Arduino and an RC522 RFID reader.'
+    prompt: 'Implement a simple RFID-based door lock system with access control.'
   },
   {
     name: 'Sound-Activated LED Show',
-    prompt: 'Build a sound-activated LED light show using a microphone sensor and addressable RGB LEDs (WS2812).'
+    prompt: 'Build a sound-activated LED light show using a microphone sensor and addressable RGB LEDs.'
   },
   {
     name: 'Data Logger',
-    prompt: 'Create a data logger that records light and temperature to an SD card using Arduino and sensors.'
+    prompt: 'Create a data logger that records sensor data to an SD card.'
   },
   {
-    name: 'Remote Weather Monitor',
-    prompt: 'Construct a remote weather monitoring station that uploads sensor data to the cloud using Arduino and WiFi.'
+    name: 'Remote IoT Monitor',
+    prompt: 'Construct a remote monitoring station that uploads sensor data to the cloud via WiFi.'
   }
 ]
 
@@ -492,13 +549,69 @@ function handleCreateAI() {
   // Require either text or an image
   if (!textPrompt && !imageData) return;
 
-  // Show the create project modal and store the prompt data
+  // Store the prompt data for later use
   pendingAIPrompt.value = {
     prompt: textPrompt,
     imageDataUrl: imageData
   };
-  console.log('[HomePage] Stored pendingAIPrompt:', JSON.stringify(pendingAIPrompt.value)); // Log the stored value
+  console.log('[HomePage] Stored pendingAIPrompt:', JSON.stringify(pendingAIPrompt.value));
+
+  // Show the modal immediately and generate name in background
+  newProjectName.value = ''; // Start with empty name
   showCreateModal.value = true;
+  
+  // Generate project name in background
+  generateProjectName(textPrompt, imageData);
+}
+
+// NEW: Generate project name using AI
+async function generateProjectName(prompt, imageDataUrl) {
+  if (!prompt && !imageDataUrl) return;
+  
+  try {
+    isGeneratingProjectName.value = true;
+    console.log('[HomePage] Generating project name...');
+    
+    // Extract text from prompt for name generation
+    let promptText = prompt || '';
+    if (imageDataUrl) {
+      promptText = promptText || 'Project with attached image';
+    }
+    
+    const result = await window.electronAPI.invokeFirebaseFunction('generateProjectName', {
+      prompt: promptText.substring(0, 200), // Limit length for API efficiency
+      context: 'Arduino project creation'
+    });
+    
+    if (result.success && result.data && result.data.projectName) {
+      let generatedName = result.data.projectName;
+      console.log('[HomePage] Generated project name:', generatedName);
+      
+      // Ensure name follows rules: no spaces, special characters, uppercase
+      generatedName = generatedName
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, '_')
+        .replace(/_+/g, '_')
+        .replace(/^_|_$/g, '');
+      
+      // Ensure it's not empty and has a reasonable length
+      if (!generatedName || generatedName.length < 3) {
+        generatedName = 'arduino_project';
+      }
+      
+      newProjectName.value = generatedName;
+    } else {
+      console.warn('[HomePage] Failed to generate project name:', result.error || 'Unknown error');
+      // Leave blank on error as requested
+      newProjectName.value = '';
+    }
+  } catch (error) {
+    console.error('[HomePage] Error generating project name:', error);
+    // Leave blank on error as requested
+    newProjectName.value = '';
+  } finally {
+    isGeneratingProjectName.value = false;
+  }
 }
 
 function openProject(project) {
@@ -609,6 +722,43 @@ async function handleDeleteProject(project) {
     }
   } catch (error) {
     alert(error.message || 'An unexpected error occurred while deleting the project.');
+  }
+}
+
+function handleEditProject(project) {
+  editingProject.value = project;
+  editProjectName.value = project.name;
+  editProjectError.value = '';
+  showEditProjectModal.value = true;
+}
+
+async function updateProjectName() {
+  editProjectError.value = '';
+  if (!editProjectName.value.trim()) {
+    editProjectError.value = 'Project name is required.';
+    return;
+  }
+
+  try {
+    if (window.electronAPI?.updateProjectName) {
+      const res = await window.electronAPI.updateProjectName(
+        editingProject.value.dir, 
+        editProjectName.value.trim()
+      );
+      
+      if (res.success) {
+        showEditProjectModal.value = false;
+        editingProject.value = null;
+        editProjectName.value = '';
+        await loadProjects();
+      } else {
+        editProjectError.value = res.error || 'Failed to update project name.';
+      }
+    } else {
+      editProjectError.value = 'Project name update is not available.';
+    }
+  } catch (error) {
+    editProjectError.value = error.message || 'An unexpected error occurred.';
   }
 }
 
@@ -733,6 +883,17 @@ watch(showCreateModal, (val) => {
     nextTick(() => {
       if (newProjectNameInput.value) {
         newProjectNameInput.value.focus()
+      }
+    })
+  }
+})
+
+watch(showEditProjectModal, (val) => {
+  if (val) {
+    nextTick(() => {
+      if (editProjectNameInput.value) {
+        editProjectNameInput.value.focus()
+        editProjectNameInput.value.select() // Select all text for easy editing
       }
     })
   }

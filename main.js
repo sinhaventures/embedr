@@ -13,16 +13,8 @@ const { MemorySaver, StateGraph, Command } = require('@langchain/langgraph');
 const { tool, StructuredTool } = require('@langchain/core/tools');
 const { z } = require('zod');
 const { AIMessageChunk } = require("@langchain/core/messages");
-const { autoUpdater } = require('electron-updater'); // Added for auto-update
-const log = require('electron-log'); // Added for auto-update logging
 
-// Configure logging for electron-updater
-autoUpdater.logger = log;
-autoUpdater.logger.transports.file.level = 'info';
-log.info('App starting...');
 
-// === Placeholder for your website's download page ===
-const MACOS_MANUAL_DOWNLOAD_URL = 'https://embedr.cc/download';
 
 // === AI Co-pilot/Agent dependencies ===
 //require('dotenv').config();
@@ -97,6 +89,8 @@ function createWindow () {
       preload: path.resolve(APP_ROOT, 'preload.js'),
       nodeIntegration: false,
       contextIsolation: true,
+      // Add partition to avoid database conflicts with other instances
+      partition: 'persist:embedr-main'
     }
   });
 
@@ -117,6 +111,19 @@ function createWindow () {
     console.error('Failed to load:', errorCode, errorDescription);
   });
 
+  // Handle potential database errors
+  mainWindow.webContents.on('crashed', (event, killed) => {
+    console.error('Renderer process crashed:', { killed });
+  });
+
+  mainWindow.webContents.on('unresponsive', () => {
+    console.warn('Renderer process became unresponsive');
+  });
+
+  mainWindow.webContents.on('responsive', () => {
+    console.log('Renderer process became responsive again');
+  });
+
   // Prevent window from being garbage collected
   mainWindow.on('closed', () => {
     mainWindow = null;
@@ -127,25 +134,6 @@ function createWindow () {
 // initialization and is ready to create browser windows.
 app.whenReady().then(() => {
   createWindow();
-
-  // Configure autoUpdater properties based on platform
-  if (process.platform === 'darwin') {
-    log.info('[Main Process] macOS detected, setting autoDownload to false for manual update notification.');
-    autoUpdater.autoDownload = false;
-  } else {
-    // For other platforms, you might want to keep autoDownload = true (default)
-    // or set it explicitly if you change the default elsewhere.
-    // autoUpdater.autoDownload = true; 
-  }
-
-  // Check for updates after the app is ready and window is created
-  // It's often good to wait a few seconds so the app is responsive
-  setTimeout(() => {
-    if (process.env.NODE_ENV !== 'development' && !process.env.ELECTRON_IS_DEV) { // Don't auto-update in dev
-        log.info('[Main Process] Checking for updates...');
-        autoUpdater.checkForUpdates();
-    }
-  }, 10000); // Increased delay to 10s to ensure app is fully up
 
   app.on('activate', () => {
     // On OS X it's common to re-create a window in the app when the
@@ -158,6 +146,8 @@ app.whenReady().then(() => {
   console.error('Failed to initialize app:', err);
 });
 
+
+
 // Quit when all windows are closed.
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
@@ -165,71 +155,7 @@ app.on('window-all-closed', () => {
   }
 });
 
-// --- Auto Updater Events ---
-autoUpdater.on('checking-for-update', () => {
-  log.info('[Main Process] Checking for update...');
-  // No direct UI from main, renderer will handle UI based on events
-});
 
-autoUpdater.on('update-available', (info) => {
-  log.info('[Main Process] Update available.', info);
-  if (mainWindow) {
-    // Send version and release notes (or name as fallback)
-    const updateDetails = {
-      version: info.version,
-      releaseNotes: info.releaseNotes || `Version ${info.version} is available.`,
-      isManualDownload: process.platform === 'darwin' // Explicitly tell renderer if it's manual
-    };
-    mainWindow.webContents.send('update-available', updateDetails);
-  }
-  // If on macOS (autoDownload = false), the update won't download automatically.
-  // For other platforms, it will start downloading if autoDownload is true.
-});
-
-autoUpdater.on('update-not-available', (info) => {
-  log.info('[Main Process] Update not available.', info);
-  // Optionally, could send an event if you want UI feedback for this
-});
-
-autoUpdater.on('error', (err) => {
-  log.error('[Main Process] Error in auto-updater. ' + err);
-  if (mainWindow) {
-    mainWindow.webContents.send('update-error', err.message);
-  }
-});
-
-autoUpdater.on('download-progress', (progressObj) => {
-  let log_message = 'Download speed: ' + progressObj.bytesPerSecond;
-  log_message = log_message + ' - Downloaded ' + progressObj.percent + '%';
-  log_message = log_message + ' (' + progressObj.transferred + '/' + progressObj.total + ')';
-  log.info('[Main Process] ' + log_message);
-  // We could send progress to renderer if we want a progress bar in the custom UI
-  // if (mainWindow) mainWindow.webContents.send('update-download-progress', progressObj.percent);
-});
-
-autoUpdater.on('update-downloaded', (info) => {
-  log.info('[Main Process] Update downloaded (or ready for manual notification on macOS if download was skipped).', info);
-  if (mainWindow) {
-    const updateDetails = {
-        version: info.version,
-        releaseNotes: info.releaseNotes || `Version ${info.version} has been downloaded.`,
-        isManualDownload: process.platform === 'darwin' && autoUpdater.autoDownload === false
-    };
-    // For macOS with autoDownload=false, this event might not be the primary trigger for UI
-    // 'update-available' is more reliable. But if it does fire, ensure UI gets the right info.
-    mainWindow.webContents.send('update-downloaded', updateDetails);
-  }
-});
-
-// Listen for the renderer to tell us to quit and install
-ipcMain.on('quit-and-install-update', () => {
-  log.info('[Main Process] Received quit-and-install-update from renderer.');
-  // This will only work if the update has actually been downloaded.
-  // For macOS with autoDownload = false, this shouldn't be called by the UI directly
-  // unless a download was somehow completed.
-  autoUpdater.quitAndInstall();
-});
-// --- End Auto Updater Events ---
 
 let PROJECTS_FILE;
 if (app.isPackaged) {
@@ -930,6 +856,326 @@ ipcMain.handle('core-upgrade', async (event, platformPackage) => {
 
 // === End Arduino Core Management Handlers ===
 
+// === Custom Board URL Management Handlers ===
+
+// Get current board manager configuration
+ipcMain.handle('board-manager-config-get', async () => {
+  return new Promise((resolve) => {
+    const command = `"${arduinoCliPath}" config dump --config-dir "${arduinoDataDir}"`;
+    exec(command, (error, stdout, stderr) => {
+      if (error) {
+        resolve({ success: false, error: stderr || error.message });
+        return;
+      }
+      try {
+        // Parse YAML output to get additional URLs
+        const yamlData = stdout;
+        const urlsMatch = yamlData.match(/additional_urls:\s*\n((?:\s*-\s*.+\n?)*)/);
+        const additionalUrls = [];
+        
+        if (urlsMatch && urlsMatch[1]) {
+          const urlsSection = urlsMatch[1];
+          const urlMatches = urlsSection.match(/^\s*-\s*(.+)$/gm);
+          if (urlMatches) {
+            urlMatches.forEach(match => {
+              const url = match.replace(/^\s*-\s*/, '').trim();
+              if (url) {
+                additionalUrls.push(url);
+              }
+            });
+          }
+        }
+        
+        resolve({ 
+          success: true, 
+          additionalUrls,
+          rawConfig: yamlData
+        });
+      } catch (e) {
+        resolve({ success: false, error: 'Failed to parse config output.' });
+      }
+    });
+  });
+});
+
+// Add a custom board URL
+ipcMain.handle('board-manager-add-url', async (event, url) => {
+  console.log('[board-manager-add-url] Adding URL:', url);
+  
+  return new Promise((resolve) => {
+    if (!url || !url.trim()) {
+      resolve({ success: false, error: 'URL is required' });
+      return;
+    }
+
+    const cleanUrl = url.trim();
+    const command = `"${arduinoCliPath}" config add board_manager.additional_urls "${cleanUrl}" --config-dir "${arduinoDataDir}"`;
+    
+    console.log('[board-manager-add-url] Executing:', command);
+    
+    exec(command, (error, stdout, stderr) => {
+      console.log('[board-manager-add-url] Command completed');
+      console.log('[board-manager-add-url] stdout:', stdout);
+      console.log('[board-manager-add-url] stderr:', stderr);
+      console.log('[board-manager-add-url] error:', error);
+      
+      if (error) {
+        let errorMessage = 'Failed to add custom board URL';
+        
+        if (stderr) {
+          errorMessage = stderr.trim();
+        } else if (error.message) {
+          errorMessage = error.message;
+        }
+        
+        console.log('[board-manager-add-url] Error message:', errorMessage);
+        resolve({ 
+          success: false, 
+          error: errorMessage,
+          output: { stdout, stderr }
+        });
+        return;
+      }
+      
+      resolve({ success: true, output: { stdout, stderr } });
+    });
+  });
+});
+
+// Remove a custom board URL
+ipcMain.handle('board-manager-remove-url', async (event, url) => {
+  console.log('[board-manager-remove-url] Removing URL:', url);
+  
+  return new Promise((resolve) => {
+    if (!url || !url.trim()) {
+      resolve({ success: false, error: 'URL is required' });
+      return;
+    }
+
+    const cleanUrl = url.trim();
+    const command = `"${arduinoCliPath}" config remove board_manager.additional_urls "${cleanUrl}" --config-dir "${arduinoDataDir}"`;
+    
+    console.log('[board-manager-remove-url] Executing:', command);
+    
+    exec(command, (error, stdout, stderr) => {
+      console.log('[board-manager-remove-url] Command completed');
+      console.log('[board-manager-remove-url] stdout:', stdout);
+      console.log('[board-manager-remove-url] stderr:', stderr);
+      console.log('[board-manager-remove-url] error:', error);
+      
+      if (error) {
+        let errorMessage = 'Failed to remove custom board URL';
+        
+        if (stderr) {
+          errorMessage = stderr.trim();
+        } else if (error.message) {
+          errorMessage = error.message;
+        }
+        
+        console.log('[board-manager-remove-url] Error message:', errorMessage);
+        resolve({ 
+          success: false, 
+          error: errorMessage,
+          output: { stdout, stderr }
+        });
+        return;
+      }
+      
+      resolve({ success: true, output: { stdout, stderr } });
+    });
+  });
+});
+
+// === End Custom Board URL Management Handlers ===
+
+// === Arduino Update Management Handlers ===
+
+// Check for outdated packages (libraries and cores)
+ipcMain.handle('outdated', async (event) => {
+  return new Promise((resolve) => {
+    const cliPath = getBundledArduinoCliPath();
+    const configDir = getArduinoCliDataDir();
+    const args = ['outdated', '--format', 'json', '--config-dir', configDir];
+    
+    console.log(`[outdated] Running: ${cliPath} ${args.join(' ')}`);
+    
+    const child = spawn(cliPath, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+    
+    let stdout = '';
+    let stderr = '';
+    
+    child.stdout.on('data', (data) => {
+      stdout += data.toString();
+    });
+    
+    child.stderr.on('data', (data) => {
+      stderr += data.toString();
+    });
+    
+    child.on('close', (code) => {
+      console.log(`[outdated] Exit code: ${code}`);
+      console.log(`[outdated] stdout: ${stdout.substring(0, 500)}...`);
+      if (stderr) console.log(`[outdated] stderr: ${stderr}`);
+      
+      if (code !== 0) {
+        console.error(`[outdated] Command failed with exit code ${code}`);
+        resolve({ success: false, error: stderr || 'Command failed' });
+        return;
+      }
+      
+      try {
+        let resultData = {};
+        if (stdout.trim()) {
+          resultData = JSON.parse(stdout);
+        }
+        console.log(`[outdated] Parsed result:`, JSON.stringify(resultData, null, 2));
+        resolve({ success: true, outdated: resultData });
+      } catch (parseErr) {
+        console.error('[outdated] JSON parse error:', parseErr);
+        console.error('[outdated] Raw stdout:', stdout);
+        resolve({ success: false, error: 'Failed to parse outdated packages data' });
+      }
+    });
+  });
+});
+
+// Upgrade a specific library
+ipcMain.handle('lib-upgrade', async (event, libraryName) => {
+  return new Promise((resolve) => {
+    const cliPath = getBundledArduinoCliPath();
+    const configDir = getArduinoCliDataDir();
+    const args = ['lib', 'upgrade', libraryName, '--format', 'json', '--config-dir', configDir];
+    
+    console.log(`[lib-upgrade] Running: ${cliPath} ${args.join(' ')}`);
+    
+    const child = spawn(cliPath, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+    
+    let stdout = '';
+    let stderr = '';
+    
+    child.stdout.on('data', (data) => {
+      stdout += data.toString();
+    });
+    
+    child.stderr.on('data', (data) => {
+      stderr += data.toString();
+    });
+    
+    child.on('close', (code) => {
+      console.log(`[lib-upgrade] Exit code: ${code}`);
+      console.log(`[lib-upgrade] stdout: ${stdout}`);
+      if (stderr) console.log(`[lib-upgrade] stderr: ${stderr}`);
+      
+      if (code !== 0) {
+        resolve({ success: false, error: stderr || 'Upgrade failed' });
+        return;
+      }
+      
+      try {
+        let resultData = {};
+        if (stdout.trim()) {
+          resultData = JSON.parse(stdout);
+        }
+        resolve({ success: true, output: resultData });
+      } catch (parseErr) {
+        resolve({ success: true, output: stdout }); // Still consider it a success but return raw output
+      }
+    });
+  });
+});
+
+// Upgrade all libraries
+ipcMain.handle('lib-upgrade-all', async (event) => {
+  return new Promise((resolve) => {
+    const cliPath = getBundledArduinoCliPath();
+    const configDir = getArduinoCliDataDir();
+    const args = ['lib', 'upgrade', '--format', 'json', '--config-dir', configDir];
+    
+    console.log(`[lib-upgrade-all] Running: ${cliPath} ${args.join(' ')}`);
+    
+    const child = spawn(cliPath, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+    
+    let stdout = '';
+    let stderr = '';
+    
+    child.stdout.on('data', (data) => {
+      stdout += data.toString();
+    });
+    
+    child.stderr.on('data', (data) => {
+      stderr += data.toString();
+    });
+    
+    child.on('close', (code) => {
+      console.log(`[lib-upgrade-all] Exit code: ${code}`);
+      console.log(`[lib-upgrade-all] stdout: ${stdout}`);
+      if (stderr) console.log(`[lib-upgrade-all] stderr: ${stderr}`);
+      
+      if (code !== 0) {
+        resolve({ success: false, error: stderr || 'Upgrade all failed' });
+        return;
+      }
+      
+      try {
+        let resultData = {};
+        if (stdout.trim()) {
+          resultData = JSON.parse(stdout);
+        }
+        resolve({ success: true, output: resultData });
+      } catch (parseErr) {
+        resolve({ success: true, output: stdout }); // Still consider it a success but return raw output
+      }
+    });
+  });
+});
+
+// Upgrade all cores
+ipcMain.handle('core-upgrade-all', async (event) => {
+  return new Promise((resolve) => {
+    const cliPath = getBundledArduinoCliPath();
+    const configDir = getArduinoCliDataDir();
+    const args = ['core', 'upgrade', '--format', 'json', '--config-dir', configDir];
+    
+    console.log(`[core-upgrade-all] Running: ${cliPath} ${args.join(' ')}`);
+    
+    const child = spawn(cliPath, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+    
+    let stdout = '';
+    let stderr = '';
+    
+    child.stdout.on('data', (data) => {
+      stdout += data.toString();
+    });
+    
+    child.stderr.on('data', (data) => {
+      stderr += data.toString();
+    });
+    
+    child.on('close', (code) => {
+      console.log(`[core-upgrade-all] Exit code: ${code}`);
+      console.log(`[core-upgrade-all] stdout: ${stdout}`);
+      if (stderr) console.log(`[core-upgrade-all] stderr: ${stderr}`);
+      
+      if (code !== 0) {
+        resolve({ success: false, error: stderr || 'Upgrade all cores failed' });
+        return;
+      }
+      
+      try {
+        let resultData = {};
+        if (stdout.trim()) {
+          resultData = JSON.parse(stdout);
+        }
+        resolve({ success: true, output: resultData });
+      } catch (parseErr) {
+        resolve({ success: true, output: stdout }); // Still consider it a success but return raw output
+      }
+    });
+  });
+});
+
+// === End Arduino Update Management Handlers ===
+
 // === Checkpoint Management ===
 
 // Helper function to extract the core logic of saving a version
@@ -1530,7 +1776,7 @@ async function getChatModel(provider, modelName, authToken, options = {}) {
   // Get the base URL for the Cloud Function
   const cloudFunctionBaseUrl = isDev 
     ? `http://127.0.0.1:5001/emdedr-822d0/us-central1/llmProxy`
-    : `https://us-central1-emdedr-822d0.cloudfunctions.net/llmProxy`;
+    : `https://llmproxy-7ya4qwdxyq-uc.a.run.app`;
   
   console.log(`[getChatModel] Called with provider: ${provider}, model: ${modelName}`);
   console.log(`[getChatModel] Using cloud function base URL: ${cloudFunctionBaseUrl}`);
@@ -2185,11 +2431,10 @@ ipcMain.on('copilot-chat-message-stream', async (event, userInput, threadId, pro
                  // Could also extract input_json_delta here if we want to show args streaming
             }
         } else if (eventType === 'on_tool_start') {
-            // Assign a unique toolId for this toolName (in case of multiple calls, use a counter)
-            if (!toolIdMap[eventName]) {
-                toolIdMap[eventName] = uuidv4();
-            }
-            const toolId = toolIdMap[eventName];
+            // Generate a unique toolId for each tool call (don't reuse IDs)
+            const toolId = uuidv4();
+            // Store this new toolId for the tool name (overwrites previous if exists)
+            toolIdMap[eventName] = toolId;
             const toolInput = eventData.input || {};
             currentRunMessages.push({
                 role: 'tool',
@@ -2204,6 +2449,7 @@ ipcMain.on('copilot-chat-message-stream', async (event, userInput, threadId, pro
             event.sender.send('copilot-chat-stream', {
                 type: 'tool_start',
                 name: eventName,
+                toolId: toolId, // Send the toolId to frontend
                 input: toolInput
             });
         } else if (eventType === 'on_tool_end') {
@@ -2230,6 +2476,7 @@ ipcMain.on('copilot-chat-message-stream', async (event, userInput, threadId, pro
             event.sender.send('copilot-chat-stream', {
                 type: 'tool_end',
                 name: eventName,
+                toolId: toolId, // Send the toolId to frontend for proper matching
                 output: toolOutput // Send the original output (string or object) to UI for rich display
             });
 
@@ -2261,31 +2508,7 @@ ipcMain.on('copilot-chat-message-stream', async (event, userInput, threadId, pro
 
 
               if (outputStringToSend !== null) {
-                  let finalOutputForUI = outputStringToSend; // Default to raw output
-
-                  // --- START: Parse and Format Compile Output ---
-                  if (eventName === 'compileSketch' && isCompileSuccess) {
-                    try {
-                      // Extract the JSON part from the tool's success message
-                      const jsonMatch = outputStringToSend.match(/Output:\s*(\{[\s\S]*?\})\s*Errors/);
-                      if (jsonMatch && jsonMatch[1]) {
-                        const jsonOutput = JSON.parse(jsonMatch[1]);
-                        if (jsonOutput && typeof jsonOutput.compiler_out === 'string') {
-                          // Format the output like manual compilation
-                          finalOutputForUI = `Compiling sketch...\n\nCompilation successful!\n\nCompiler Output:\n${jsonOutput.compiler_out.trim()}`;
-                          console.log(`[Agent Stream][on_tool_end] Parsed and formatted compile output for UI.`);
-                        } else {
-                           console.warn(`[Agent Stream][on_tool_end] Compile JSON parsed, but 'compiler_out' not found or not a string. Falling back to raw output.`);
-                        }
-                      } else {
-                         console.warn(`[Agent Stream][on_tool_end] Could not extract JSON from successful compile output string. Falling back to raw output.`);
-                      }
-                    } catch (parseError) {
-                      console.error(`[Agent Stream][on_tool_end] Error parsing compile JSON output: ${parseError}. Falling back to raw output.`);
-                      // Keep finalOutputForUI as the original string
-                    }
-                  }
-                  // --- END: Parse and Format Compile Output ---
+                  let finalOutputForUI = outputStringToSend; // Use the tool output directly since it's now properly formatted
 
                   console.log(`[Agent Stream][on_tool_end] Tool "${eventName}" finished. Output type: ${typeof outputStringToSend}, Length: ${outputStringToSend.length}`); 
                   if (mainWindow && mainWindow.webContents) {
@@ -2444,6 +2667,71 @@ ipcMain.handle('delete-project', async (event, projectDir) => {
     console.error('Error deleting project:', err);
     return { success: false, error: err.message || 'Failed to delete project.' };
   }
+});
+
+ipcMain.handle('update-project-name', async (event, projectDir, newName) => {
+  try {
+    // Sanitize the new name
+    const safeName = newName.replace(/[^a-zA-Z0-9_-]/g, '');
+    if (!safeName) {
+      return { success: false, error: 'Invalid project name' };
+    }
+
+    // Get current project metadata
+    let projectsMetadata = getProjectsMetadata();
+    const projectIndex = projectsMetadata.findIndex(p => p.dir === projectDir);
+    
+    if (projectIndex === -1) {
+      return { success: false, error: 'Project not found in metadata' };
+    }
+
+    const project = projectsMetadata[projectIndex];
+    const oldInoPath = project.ino;
+    
+    // Create new directory path
+    const parentDir = path.dirname(projectDir);
+    const newProjectDir = path.join(parentDir, safeName);
+    
+    // Check if new directory already exists (and it's not the same project)
+    if (fs.existsSync(newProjectDir) && newProjectDir !== projectDir) {
+      return { success: false, error: 'A project with this name already exists' };
+    }
+
+    // If the directory names are the same, only update metadata
+    if (newProjectDir === projectDir) {
+      // Only update the name in metadata, keep the same directory
+      projectsMetadata[projectIndex].name = safeName;
+      saveProjectsMetadata(projectsMetadata);
+      return { success: true };
+    }
+
+    // Rename the directory
+    fs.renameSync(projectDir, newProjectDir);
+    
+    // Update the .ino file name
+    const oldInoName = path.basename(oldInoPath);
+    const newInoPath = path.join(newProjectDir, `${safeName}.ino`);
+    const currentInoPath = path.join(newProjectDir, oldInoName);
+    
+    if (fs.existsSync(currentInoPath) && currentInoPath !== newInoPath) {
+      fs.renameSync(currentInoPath, newInoPath);
+    }
+
+    // Update metadata
+    projectsMetadata[projectIndex] = {
+      ...project,
+      name: safeName,
+      dir: newProjectDir,
+      ino: newInoPath
+    };
+    
+    saveProjectsMetadata(projectsMetadata);
+    
+    return { success: true, project: projectsMetadata[projectIndex] };
+  } catch (err) {
+    console.error('Error updating project name:', err);
+    return { success: false, error: err.message || 'Failed to update project name.' };
+  }
 }); 
 
 ipcMain.handle('set-window-title', async (event, title) => {
@@ -2505,17 +2793,27 @@ ipcMain.handle('set-selected-board-options', (event, options) => {
   return { success: true };
 });
 
+// New IPC Handler: Get the current board options (for agent tools)
+ipcMain.handle('get-current-board-options', (event) => {
+  console.log(`[IPC Handler] get-current-board-options called, returning:`, currentSelectedBoardOptions);
+  return { success: true, options: currentSelectedBoardOptions };
+});
+
 // Helper function to construct full FQBN
 function constructFullFqbn(baseFqbn, options) {
   if (!baseFqbn) return '';
-  let fullFqbn = baseFqbn;
+  
+  // Extract the true base FQBN (remove any existing options)
+  const actualBaseFqbn = baseFqbn.split(':').slice(0, 3).join(':'); // Take only vendor:arch:board
+  
+  let fullFqbn = actualBaseFqbn;
   if (options && typeof options === 'object' && Object.keys(options).length > 0) {
     const optionString = Object.entries(options)
       .map(([key, value]) => `${key}=${value}`)
       .join(',');
     fullFqbn += `:${optionString}`;
   }
-  console.log(`[constructFullFqbn] Base: ${baseFqbn}, Options: ${JSON.stringify(options)}, Result: ${fullFqbn}`);
+  console.log(`[constructFullFqbn] Input: ${baseFqbn}, Extracted Base: ${actualBaseFqbn}, Options: ${JSON.stringify(options)}, Result: ${fullFqbn}`);
   return fullFqbn;
 }
 
@@ -2650,7 +2948,7 @@ ipcMain.handle('invoke-monacopilot-completion', async (event, body) => {
 
   const monacopilotProxyUrl = isDev
     ? `http://127.0.0.1:5001/emdedr-822d0/us-central1/monacopilotProxy`
-    : `https://us-central1-emdedr-822d0.cloudfunctions.net/monacopilotProxy`;
+    : `https://monacopilotproxy-7ya4qwdxyq-uc.a.run.app`;
 
   console.log(`[${functionName}] Sending request to: ${monacopilotProxyUrl}`);
 
@@ -2755,10 +3053,27 @@ ipcMain.handle('invoke-firebase-function', async (event, functionName, payload) 
 
   let authToken = cachedAuthToken;
   const isEmulator = process.env.FIREBASE_EMULATOR_HOST === 'localhost:5001';
-  const baseUrl = isEmulator
-    ? `http://localhost:5001/emdedr-822d0/us-central1`
-    : `https://us-central1-emdedr-822d0.cloudfunctions.net`;
-  const functionUrl = `${baseUrl}/${functionName}`;
+  // Firebase Functions Gen 2 URLs (Cloud Run)
+  const functionUrls = {
+    'generateAuthRedirectToken': 'https://generateauthredirecttoken-7ya4qwdxyq-uc.a.run.app',
+    'llmProxy': 'https://llmproxy-7ya4qwdxyq-uc.a.run.app',
+    'monacopilotProxy': 'https://monacopilotproxy-7ya4qwdxyq-uc.a.run.app',
+    'generateChatName': 'https://us-central1-emdedr-822d0.cloudfunctions.net/generateChatName',
+    'generateProjectName': 'https://us-central1-emdedr-822d0.cloudfunctions.net/generateProjectName',
+    'createRazorpaySubscription': 'https://createrazorpaysubscription-7ya4qwdxyq-uc.a.run.app',
+    'cancelRazorpaySubscription': 'https://cancelrazorpaysubscription-7ya4qwdxyq-uc.a.run.app',
+    'razorpayWebhook': 'https://razorpaywebhook-7ya4qwdxyq-uc.a.run.app',
+    'logHeliconeUsageWebhook': 'https://logheliconeusagewebhook-7ya4qwdxyq-uc.a.run.app'
+  };
+  
+  const functionUrl = isEmulator
+    ? `http://localhost:5001/emdedr-822d0/us-central1/${functionName}`
+    : functionUrls[functionName];
+
+  if (!functionUrl && !isEmulator) {
+    console.error(`[invoke-firebase-function:${functionName}] Unknown function name: ${functionName}`);
+    return { success: false, error: `Unknown function: ${functionName}`, data: null };
+  }
 
   if (!authToken || (tokenExpiryTime && Date.now() >= tokenExpiryTime)) {
     console.warn(`[invoke-firebase-function:${functionName}] No valid cached auth token, requesting from renderer...`);
@@ -2785,28 +3100,63 @@ ipcMain.handle('invoke-firebase-function', async (event, functionName, payload) 
   }
 
   console.log(`[invoke-firebase-function:${functionName}] Sending POST request to: ${functionUrl}`);
-  try {
-    const response = await fetch(functionUrl, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${authToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload || {}),
-    });
+  
+  // Retry logic for network issues
+  const maxRetries = 3;
+  let lastError = null;
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`[invoke-firebase-function:${functionName}] Attempt ${attempt}/${maxRetries}`);
+      
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 30000); // 30 second timeout
 
-    const responseData = await response.json();
+      const response = await fetch(functionUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload || {}),
+        signal: controller.signal,
+      });
 
-    if (!response.ok) {
-      console.error(`[invoke-firebase-function:${functionName}] Firebase function returned error (${response.status}):`, responseData);
-      return { success: false, error: responseData.error || `Function call failed with status ${response.status}`, data: responseData };
+      clearTimeout(timeout);
+
+      const responseData = await response.json();
+
+      if (!response.ok) {
+        console.error(`[invoke-firebase-function:${functionName}] Firebase function returned error (${response.status}):`, responseData);
+        return { success: false, error: responseData.error || `Function call failed with status ${response.status}`, data: responseData };
+      }
+      console.log(`[invoke-firebase-function:${functionName}] Firebase function call successful.`);
+      return { success: true, data: responseData };
+    } catch (error) {
+      lastError = error;
+      console.error(`[invoke-firebase-function:${functionName}] Attempt ${attempt} failed:`, error.message);
+      
+             // Don't retry for auth errors or abort errors
+       if (error.name === 'AbortError' || error.message.includes('401') || error.message.includes('403')) {
+         break;
+       }
+       
+       // Special handling for specific error types
+       if (error.code === 'UND_ERR_CONNECT_TIMEOUT' || error.message.includes('Connect Timeout Error')) {
+         console.log(`[invoke-firebase-function:${functionName}] Connection timeout detected, will retry...`);
+       }
+      
+      // Wait before retrying (exponential backoff)
+      if (attempt < maxRetries) {
+        const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000); // Cap at 5 seconds
+        console.log(`[invoke-firebase-function:${functionName}] Waiting ${delay}ms before retry...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
     }
-    console.log(`[invoke-firebase-function:${functionName}] Firebase function call successful.`);
-    return { success: true, data: responseData };
-  } catch (error) {
-    console.error(`[invoke-firebase-function:${functionName}] Error calling Firebase function:`, error);
-    return { success: false, error: error.message || 'Network error or failed to call function.', data: null };
   }
+  
+  console.error(`[invoke-firebase-function:${functionName}] All ${maxRetries} attempts failed. Last error:`, lastError);
+  return { success: false, error: lastError?.message || 'Network error or failed to call function after multiple attempts.', data: null };
 });
 
 // === IPC Handler for opening external URLs (NEW) ===
@@ -2821,14 +3171,171 @@ ipcMain.handle('open-external-url', async (event, url) => {
   }
 });
 
-// Handler for renderer to open the manual download URL
-ipcMain.handle('open-manual-download-url', async () => {
-  log.info(`[Main Process] Opening manual download URL: ${MACOS_MANUAL_DOWNLOAD_URL}`);
+
+
+// === Custom Library Installation Handlers ===
+
+ipcMain.handle('lib-install-git', async (event, gitUrl, version) => {
+  console.log('[lib-install-git] Handler called with:', { gitUrl, version });
+  
+  return new Promise((resolve) => {
+    if (!gitUrl) {
+      resolve({ success: false, error: 'Git URL is required' });
+      return;
+    }
+
+    // Build the command
+    let command = `"${arduinoCliPath}" lib install --git-url "${gitUrl}" --format json --config-dir "${arduinoDataDir}"`;
+    
+    if (version && version.trim()) {
+      command += ` --git-ref "${version.trim()}"`;
+    }
+
+    console.log('[lib-install-git] Executing:', command);
+    
+    exec(command, (error, stdout, stderr) => {
+      console.log('[lib-install-git] Command completed');
+      console.log('[lib-install-git] stdout:', stdout);
+      console.log('[lib-install-git] stderr:', stderr);
+      console.log('[lib-install-git] error:', error);
+      
+      if (error) {
+        // Parse error message to extract meaningful information
+        let errorMessage = 'Git installation failed';
+        
+        if (stderr) {
+          errorMessage = stderr.trim();
+        } else if (error.message) {
+          errorMessage = error.message;
+        }
+        
+        // Clean up common arduino-cli error patterns
+        errorMessage = errorMessage
+          .replace(/^Error: /, '')
+          .replace(/^library install failed: /, '')
+          .replace(/^moving extracted archive to destination dir: /, '');
+        
+        console.log('[lib-install-git] Cleaned error message:', errorMessage);
+        resolve({ 
+          success: false, 
+          error: errorMessage,
+          output: { stdout, stderr }
+        });
+        return;
+      }
+      
+      // Check if stdout contains error information
+      if (stdout && stdout.toLowerCase().includes('error')) {
+        try {
+          const parsed = JSON.parse(stdout);
+          if (parsed.error) {
+            resolve({ 
+              success: false, 
+              error: parsed.error,
+              output: { stdout, stderr }
+            });
+            return;
+          }
+        } catch (e) {
+          // Not JSON, treat as plain text error
+          resolve({ 
+            success: false, 
+            error: stdout.trim(),
+            output: { stdout, stderr }
+          });
+          return;
+        }
+      }
+      
+      resolve({ success: true, output: { stdout, stderr } });
+    });
+  });
+});
+
+ipcMain.handle('lib-install-zip', async (event, zipPath) => {
+  console.log('[lib-install-zip] Handler called with:', { zipPath });
+  
+  return new Promise((resolve) => {
+    if (!zipPath) {
+      resolve({ success: false, error: 'Zip file path is required' });
+      return;
+    }
+
+    const command = `"${arduinoCliPath}" lib install --zip-path "${zipPath}" --format json --config-dir "${arduinoDataDir}"`;
+    
+    console.log('[lib-install-zip] Executing:', command);
+    
+    exec(command, (error, stdout, stderr) => {
+      console.log('[lib-install-zip] Command completed');
+      console.log('[lib-install-zip] stdout:', stdout);
+      console.log('[lib-install-zip] stderr:', stderr);
+      console.log('[lib-install-zip] error:', error);
+      
+      if (error) {
+        // Parse error message to extract meaningful information
+        let errorMessage = 'Zip installation failed';
+        
+        if (stderr) {
+          errorMessage = stderr.trim();
+        } else if (error.message) {
+          errorMessage = error.message;
+        }
+        
+        // Clean up common arduino-cli error patterns
+        errorMessage = errorMessage
+          .replace(/^Error: /, '')
+          .replace(/^library install failed: /, '')
+          .replace(/^moving extracted archive to destination dir: /, '');
+        
+        console.log('[lib-install-zip] Cleaned error message:', errorMessage);
+        resolve({ 
+          success: false, 
+          error: errorMessage,
+          output: { stdout, stderr }
+        });
+        return;
+      }
+      
+      // Check if stdout contains error information
+      if (stdout && stdout.toLowerCase().includes('error')) {
+        try {
+          const parsed = JSON.parse(stdout);
+          if (parsed.error) {
+            resolve({ 
+              success: false, 
+              error: parsed.error,
+              output: { stdout, stderr }
+            });
+            return;
+          }
+        } catch (e) {
+          // Not JSON, treat as plain text error
+          resolve({ 
+            success: false, 
+            error: stdout.trim(),
+            output: { stdout, stderr }
+          });
+          return;
+        }
+      }
+      
+      resolve({ success: true, output: { stdout, stderr } });
+    });
+  });
+});
+
+// === End Custom Library Installation Handlers ===
+
+// === File Dialog Handlers ===
+
+ipcMain.handle('show-open-dialog', async (event, options) => {
   try {
-    await shell.openExternal(MACOS_MANUAL_DOWNLOAD_URL);
-    return { success: true };
+    const result = await dialog.showOpenDialog(mainWindow, options);
+    return { success: true, ...result };
   } catch (error) {
-    log.error('[Main Process] Error opening external URL:', error);
+    console.error('[show-open-dialog] Error:', error);
     return { success: false, error: error.message };
   }
 });
+
+// === End File Dialog Handlers ===

@@ -119,34 +119,90 @@ const compileSketchTool = tool(
     }
     
     try {
-      // Use our custom invokeIpc function
-      // Pass the full fqbn as baseFqbn and null for options (as before)
-      console.log(`[Agent Tool] Calling invokeIpc('compile-sketch', ${fqbn}, null, ${sketchPath})`);
-      const result = await invokeIpc('compile-sketch', fqbn, null, sketchPath); 
+      // Get the current board options from the global state
+      const boardOptionsResult = await invokeIpc('get-current-board-options');
+      const boardOptions = boardOptionsResult?.options || {};
+      
+      // Use our custom invokeIpc function with proper argument order and board options
+      console.log(`[Agent Tool] Calling invokeIpc('compile-sketch', ${fqbn}, ${JSON.stringify(boardOptions)}, ${sketchPath})`);
+      const result = await invokeIpc('compile-sketch', fqbn, boardOptions, sketchPath); 
 
       if (result.success) {
         // --- SUCCESS CASE --- 
-        // Return only a simple success message, optionally parse for memory later if needed
-        return "Compile successful.";
-      } else {
-        // --- FAILURE CASE ---
-        let errorSummary = `Compile failed. ${result.error || 'Unknown reason.'}\n`; // Start with the high-level error
-        let specificErrors = "";
-
+        // Parse the JSON output from arduino-cli to provide a meaningful summary
         if (result.output) {
           try {
             const outputJson = JSON.parse(result.output);
+            let summary = "Compilation successful!\n\n";
+            
+            // Add compiler output (memory usage, etc.)
+            if (outputJson.compiler_out && outputJson.compiler_out.trim()) {
+              summary += `Compiler Output:\n${outputJson.compiler_out.trim()}\n\n`;
+            }
+            
+            // Add memory usage summary if available
+            if (outputJson.builder_result?.executable_sections_size) {
+              summary += "Memory Usage:\n";
+              outputJson.builder_result.executable_sections_size.forEach(section => {
+                const percentage = Math.round((section.size / section.max_size) * 100);
+                summary += `- ${section.name}: ${section.size} bytes (${percentage}%) of ${section.max_size} bytes\n`;
+              });
+              summary += "\n";
+            }
+            
+            // Add any warnings if present
+            if (outputJson.builder_result?.diagnostics?.length > 0) {
+              const warnings = outputJson.builder_result.diagnostics.filter(d => d.severity === 'WARNING');
+              if (warnings.length > 0) {
+                summary += "Warnings:\n";
+                warnings.forEach(warning => {
+                  summary += `- ${warning.message}`;
+                  if (warning.file) {
+                    summary += ` (at ${path.basename(warning.file)}:${warning.line})`;
+                  }
+                  summary += "\n";
+                });
+              }
+            }
+            
+            return summary.trim();
+          } catch (parseError) {
+            console.warn('[Agent Tool] Could not parse compile output JSON, falling back to simple success message:', parseError);
+            return "Compilation successful!";
+          }
+        } else {
+          return "Compilation successful!";
+        }
+      } else {
+        // --- FAILURE CASE ---
+        console.log('[Agent Tool] Compilation failed. Analyzing error details...');
+        console.log('[Agent Tool] result.error:', result.error);
+        console.log('[Agent Tool] result.output:', result.output);
+        
+        let errorSummary = `Compilation failed.\n`; // Start with simple message
+        let specificErrors = "";
+
+        // First, try to parse JSON output for structured errors
+        if (result.output) {
+          console.log('[Agent Tool] Attempting to parse JSON output...');
+          try {
+            const outputJson = JSON.parse(result.output);
+            console.log('[Agent Tool] Successfully parsed JSON output:', outputJson);
 
             // Prioritize structured diagnostics
             if (outputJson.builder_result?.diagnostics?.length > 0) {
-              const errorsOnly = outputJson.builder_result.diagnostics.filter(d => d.severity === 'ERROR');
+              const errorsOnly = outputJson.builder_result.diagnostics.filter(d => d.severity === 'ERROR' || d.severity === 'FATAL');
               const warningsOnly = outputJson.builder_result.diagnostics.filter(d => d.severity === 'WARNING');
               const MAX_ITEMS_TO_SHOW = 7; // Limit total diagnostics shown
 
               if (errorsOnly.length > 0) {
                  specificErrors += "Compiler Errors:\n";
                  errorsOnly.slice(0, MAX_ITEMS_TO_SHOW).forEach(diag => {
-                   specificErrors += `- ${diag.message} (at ${path.basename(diag.file || 'unknown')}:${diag.line})\n`;
+                   specificErrors += `- ${diag.message}`;
+                   if (diag.file) {
+                     specificErrors += ` (at ${path.basename(diag.file)}:${diag.line})`;
+                   }
+                   specificErrors += "\n";
                  });
                  if (errorsOnly.length > MAX_ITEMS_TO_SHOW) {
                    specificErrors += `- ... (${errorsOnly.length - MAX_ITEMS_TO_SHOW} more errors)\n`;
@@ -154,47 +210,60 @@ const compileSketchTool = tool(
               }
               
               if (warningsOnly.length > 0 && errorsOnly.length < MAX_ITEMS_TO_SHOW) {
-                 specificErrors += "Compiler Warnings:\n";
+                 specificErrors += "\nCompiler Warnings:\n";
                  const warningsToShow = Math.max(0, MAX_ITEMS_TO_SHOW - errorsOnly.length);
                  warningsOnly.slice(0, warningsToShow).forEach(diag => {
-                    specificErrors += `- ${diag.message} (at ${path.basename(diag.file || 'unknown')}:${diag.line})\n`;
+                    specificErrors += `- ${diag.message}`;
+                    if (diag.file) {
+                      specificErrors += ` (at ${path.basename(diag.file)}:${diag.line})`;
+                    }
+                    specificErrors += "\n";
                  });
                  if (warningsOnly.length > warningsToShow) {
                     specificErrors += `- ... (${warningsOnly.length - warningsToShow} more warnings)\n`;
                  }
               }
-
-            } 
+            }
             // Fallback to compiler_err string if no diagnostics
-            else if (outputJson.compiler_err) {
+            else if (outputJson.compiler_err && outputJson.compiler_err.trim()) {
               specificErrors += "Compiler Errors:\n";
-              // Limit the length of raw compiler_err
-              const MAX_ERR_LENGTH = 600; // Increased slightly
               const trimmedError = outputJson.compiler_err.trim();
+              const MAX_ERR_LENGTH = 800; // Increased for better error context
               specificErrors += trimmedError.length > MAX_ERR_LENGTH 
                                   ? trimmedError.substring(0, MAX_ERR_LENGTH) + "..." 
                                   : trimmedError;
             }
+            // Check for other error fields in JSON
+            else if (outputJson.error) {
+              specificErrors += "Error Details:\n" + outputJson.error;
+            }
           } catch (parseError) {
             console.error('[Agent Tool] Failed to parse compile output JSON on failure:', parseError);
-            // If JSON parsing fails, include a snippet of the raw error string from stderr for context
-            specificErrors += "Could not parse compiler output JSON. Raw error details:\n";
-            const MAX_RAW_LENGTH = 500;
-            const rawInfo = result.error || "";
-            specificErrors += rawInfo.length > MAX_RAW_LENGTH 
-                                  ? rawInfo.substring(0, MAX_RAW_LENGTH) + "..." 
-                                  : rawInfo;
+            // If JSON parsing fails, fall through to use stderr/error info
+            console.log('[Agent Tool] Output that failed to parse:', result.output?.substring(0, 500));
           }
         }
-        
-        // Append extracted/summarized errors if found
-        if (specificErrors.trim()) {
-          errorSummary += specificErrors.trim();
-        } else if (!result.error && !result.output) {
-          errorSummary += "No specific compiler errors or output available.";
+
+        // If we didn't get specific errors from JSON, use the stderr/error info
+        if (!specificErrors.trim() && result.error) {
+          console.log('[Agent Tool] No specific errors found in JSON, using stderr/error...');
+          specificErrors += "Error Details:\n";
+          const errorText = result.error.trim();
+          const MAX_ERR_LENGTH = 800;
+          specificErrors += errorText.length > MAX_ERR_LENGTH 
+                              ? errorText.substring(0, MAX_ERR_LENGTH) + "..." 
+                              : errorText;
         }
 
-        return errorSummary.trim(); // Return the concise error message
+        // If we still have no specific errors, provide generic message
+        if (!specificErrors.trim()) {
+          specificErrors = "No specific error details available. Check that:\n" +
+                          "- All required libraries are installed\n" +
+                          "- The board configuration is correct\n" +
+                          "- The code syntax is valid";
+        }
+        
+        return (errorSummary + specificErrors).trim();
       }
     } catch (error) {
       console.error('[Agent Tool Error] compileSketchTool:', error);
@@ -221,13 +290,52 @@ const uploadSketchTool = tool(
     if (!fqbn) return 'Error: FQBN argument is missing.';
     if (!port) return 'Error: port argument is missing.';
 
+    // Validate the port selection
+    if (port.includes('Bluetooth') || port.includes('bluetooth')) {
+      return 'Error: Selected port appears to be a Bluetooth port. Please select a physical USB port for your Arduino instead. Use the "listSerialPorts" tool to see available ports.';
+    }
+
     try {
-      // Use our custom invokeIpc function
-      const result = await invokeIpc('upload-sketch', sketchPath, port, fqbn);
+      // Get the current board options from the global state
+      const boardOptionsResult = await invokeIpc('get-current-board-options');
+      const boardOptions = boardOptionsResult?.options || {};
+      
+      // Use our custom invokeIpc function with proper argument order and board options
+      console.log(`[Agent Tool] Calling invokeIpc('upload-sketch', ${fqbn}, ${JSON.stringify(boardOptions)}, ${port}, ${sketchPath})`);
+      const result = await invokeIpc('upload-sketch', fqbn, boardOptions, port, sketchPath);
       if (result.success) {
-        return `Upload successful. Output:\n${result.output}`;
+        let summary = "Upload successful!\n\n";
+        
+        // Add the command that was executed if available
+        if (result.details) {
+          summary += `Command Executed:\n${result.details.trim()}\n\n`;
+        }
+        
+        // Add the detailed output (usually avrdude logs)
+        if (result.output) {
+          summary += `Upload Output:\n${result.output.trim()}\n`;
+        }
+        
+        return summary.trim();
       } else {
-        return `Upload failed. Error:\n${result.error}`;
+        let errorSummary = "Upload failed!\n\n";
+        
+        // Add command details if available
+        if (result.details) {
+          errorSummary += `Command Attempted:\n${result.details.trim()}\n\n`;
+        }
+        
+        // Add error details
+        if (result.error) {
+          errorSummary += `Error Details:\n${result.error.trim()}\n`;
+        }
+        
+        // Add any output that might contain useful information
+        if (result.output) {
+          errorSummary += `\nOutput Log:\n${result.output.trim()}\n`;
+        }
+        
+        return errorSummary.trim();
       }
     } catch (error) {
       console.error('[Agent Tool Error] uploadSketchTool:', error);
@@ -673,4 +781,4 @@ module.exports = [
   installLibraryTool,
   selectBoardTool,
   selectPortTool,
-]; 
+];

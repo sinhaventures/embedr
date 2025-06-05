@@ -46,12 +46,32 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.removeAllListeners('core-install-progress');
   },
   // --- END Arduino Core Management API ---
+
+  // --- Custom Board URL Management API ---
+  getBoardManagerConfig: () => ipcRenderer.invoke('board-manager-config-get'),
+  addBoardManagerUrl: (url) => ipcRenderer.invoke('board-manager-add-url', url),
+  removeBoardManagerUrl: (url) => ipcRenderer.invoke('board-manager-remove-url', url),
+  // --- END Custom Board URL Management API ---
+
+  // --- Arduino Update Management API ---
+  outdated: () => ipcRenderer.invoke('outdated'),
+  libUpgrade: (libraryName) => ipcRenderer.invoke('lib-upgrade', libraryName),
+  libUpgradeAll: () => ipcRenderer.invoke('lib-upgrade-all'),
+  coreUpgradeAll: () => ipcRenderer.invoke('core-upgrade-all'),
+  // --- END Arduino Update Management API ---
+
+  // --- Custom Library Installation API ---
+  installLibraryGit: (gitUrl, version) => ipcRenderer.invoke('lib-install-git', gitUrl, version),
+  installLibraryZip: (zipPath) => ipcRenderer.invoke('lib-install-zip', zipPath),
+  showOpenDialog: (options) => ipcRenderer.invoke('show-open-dialog', options),
+  // --- END Custom Library Installation API ---
   
   saveVersion: (filePath) => ipcRenderer.invoke('save-version', filePath),
   listVersions: (filePath) => ipcRenderer.invoke('list-versions', filePath),
   readVersion: (versionPath) => ipcRenderer.invoke('read-version', versionPath),
   deleteVersion: (versionPath) => ipcRenderer.invoke('delete-version', versionPath),
   deleteProject: (projectDir) => ipcRenderer.invoke('delete-project', projectDir),
+  updateProjectName: (projectDir, newName) => ipcRenderer.invoke('update-project-name', projectDir, newName),
   updateProjectLastOpened: (projectDir) => ipcRenderer.invoke('update-project-last-opened', projectDir),
 
   // --- Co-pilot Chat API ---
@@ -164,18 +184,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   openExternalUrl: (url) => ipcRenderer.invoke('open-external-url', url),
   // =======================================================
 
-  // --- Auto Update API ---
-  onUpdateAvailable: (callback) => ipcRenderer.on('update-available', (_event, updateDetails) => callback(updateDetails)),
-  onUpdateDownloaded: (callback) => ipcRenderer.on('update-downloaded', (_event, updateDetails) => callback(updateDetails)),
-  onUpdateError: (callback) => ipcRenderer.on('update-error', (_event, errorMsg) => callback(errorMsg)),
-  quitAndInstallUpdate: () => ipcRenderer.send('quit-and-install-update'),
-  openManualDownloadUrl: () => ipcRenderer.invoke('open-manual-download-url'),
-  removeAllUpdateListeners: () => {
-    ipcRenderer.removeAllListeners('update-available');
-    ipcRenderer.removeAllListeners('update-downloaded');
-    ipcRenderer.removeAllListeners('update-error');
-  }
-  // --- END Auto Update API ---
+
 });
 
 console.log('Preload script loaded and contextBridge executed.');

@@ -182,6 +182,85 @@ The application uses Firebase for:
 - User authentication
 - Cloud Functions for secure LLM API proxying (optional)
 
+## Firebase IAM Permissions Setup
+
+### Fixing the `generateAuthRedirectToken` Function IAM Error
+
+If you encounter the error: `Permission 'iam.serviceAccounts.signBlob' denied on resource`, you need to grant the required IAM permissions to your Firebase service account.
+
+#### Option 1: Using Firebase CLI (Recommended)
+
+1. **Install Firebase CLI** (if not already installed):
+   ```bash
+   npm install -g firebase-tools
+   ```
+
+2. **Login to Firebase**:
+   ```bash
+   firebase login
+   ```
+
+3. **Set your project** (replace `your-project-id` with your actual Firebase project ID):
+   ```bash
+   firebase use your-project-id
+   ```
+
+4. **Deploy the functions with automatic IAM setup**:
+   ```bash
+   firebase deploy --only functions
+   ```
+
+#### Option 2: Using Google Cloud Console
+
+1. **Go to Google Cloud Console IAM**:
+   - Visit: https://console.cloud.google.com/iam-admin/iam
+   - Select your Firebase project
+
+2. **Find your Firebase service account**:
+   - Look for an account ending with `@your-project-id.iam.gserviceaccount.com`
+   - Usually named: `firebase-adminsdk-xxxxx@your-project-id.iam.gserviceaccount.com`
+
+3. **Edit the service account**:
+   - Click the edit (pencil) icon next to the service account
+   - Click "ADD ANOTHER ROLE"
+
+4. **Add the required role**:
+   - Search for "Service Account Token Creator"
+   - Select "Service Account Token Creator" role
+   - Click "SAVE"
+
+#### Option 3: Using Google Cloud CLI
+
+```bash
+# Replace YOUR_PROJECT_ID with your actual Firebase project ID
+PROJECT_ID="YOUR_PROJECT_ID"
+
+# Get the service account email
+SERVICE_ACCOUNT=$(gcloud iam service-accounts list --filter="displayName:firebase-adminsdk" --format="value(email)" --project=$PROJECT_ID)
+
+# Grant the Service Account Token Creator role
+gcloud projects add-iam-policy-binding $PROJECT_ID \
+    --member="serviceAccount:$SERVICE_ACCOUNT" \
+    --role="roles/iam.serviceAccountTokenCreator"
+```
+
+#### Verification
+
+After setting up the permissions:
+
+1. **Redeploy your functions**:
+   ```bash
+   firebase deploy --only functions:generateAuthRedirectToken
+   ```
+
+2. **Test the subscription portal redirect** in your application
+
+### Troubleshooting
+
+- **Error persists**: Wait 5-10 minutes for IAM changes to propagate
+- **Multiple service accounts**: Ensure you're modifying the correct `firebase-adminsdk` service account
+- **Still having issues**: Check the [Firebase documentation](https://firebase.google.com/docs/auth/admin/create-custom-tokens) for the latest requirements
+
 ## Contributing
 
 Contributions are welcome! Please:

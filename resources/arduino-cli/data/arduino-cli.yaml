@@ -1,10 +1,7 @@
 board_manager:
     additional_urls:
-        - https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
-# library:
-#   enable_unsafe_install: false
+        - https://dl.espressif.com/dl/package_esp32_index.json
+library:
+    enable_unsafe_install: true
 network:
-    timeout: 5m
     connection_timeout: 5m
-    max_connections: 10
-    max_pending_requests: 10

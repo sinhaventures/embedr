@@ -3,7 +3,7 @@
   "private": true,
   "description": "Embedr - AI Powered Arduino IDE",
   "author": "Sinha Ventures <support@embedr.cc>",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "type": "commonjs",
   "main": "main.js",
   "scripts": {
@@ -11,7 +11,9 @@
     "build": "vite build",
     "preview": "vite preview",
     "electron:dev": "cross-env NODE_ENV=development concurrently -k \"vite --host\" \"wait-on tcp:5173 && electron ./main.js\"",
+    "electron:prod": "cross-env NODE_ENV=production concurrently -k \"vite --host\" \"wait-on tcp:5173 && electron ./main.js\"",
     "electron:build": "cross-env NODE_ENV=production vite build && electron-builder",
+    "electron:build:win:allarch": "cross-env NODE_ENV=production vite build && electron-builder --win --x64 --ia32 --arm64",
     "electron:start": "cross-env NODE_ENV=production vite build && electron .",
     "emulators:start": "firebase emulators:start",
     "dev:emulators": "cross-env NODE_ENV=development concurrently -k \"firebase emulators:start\" \"vite --host\" \"wait-on tcp:5173 && electron ./main.js\"",
@@ -34,9 +36,7 @@
     "diff": "^7.0.0",
     "dompurify": "^3.2.5",
     "dotenv": "^16.5.0",
-    "electron-log": "^5.4.0",
     "electron-squirrel-startup": "^1.0.1",
-    "electron-updater": "^6.6.2",
     "firebase": "^11.6.0",
     "highlight.js": "^11.11.1",
     "langchain": "^0.3.24",
@@ -82,12 +82,6 @@
   "build": {
     "appId": "com.embedr.app",
     "productName": "Embedr",
-    "publish": {
-      "provider": "github",
-      "owner": "sinhaventures",
-      "repo": "embedr",
-      "releaseType": "draft"
-    },
     "directories": {
       "output": "dist_electron"
     },
@@ -128,11 +122,17 @@
       "icon": "build/icons/mac/icon.icns"
     },
     "win": {
-      "icon": "build/icons/win/icon.ico"
+      "icon": "build/icons/win/icon.ico",
+      "target": "nsis",
+      "artifactName": "${productName} Setup ${version}-${arch}.${ext}"
     },
     "linux": {
       "icon": "build/icons",
       "category": "Development"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false
     }
   }
 }

@@ -4,12 +4,16 @@
     <span>{{ errorMessage }}</span>
     <button @click="dismissErrorTooltip" class="error-tooltip-close-btn">&times;</button>
   </div>
+  <div v-if="showDebugInfo" class="debug-info">
+    <div>Pending Requests: {{ pendingRequestCount }}</div>
+    <div>Cache Size: {{ cacheSize }}</div>
+    <div>Last Completion: {{ lastCompletionTime }}ms</div>
+  </div>
 </template>
 
 <script setup>
 import { ref, onMounted, onBeforeUnmount, watch } from 'vue';
 import * as monaco from 'monaco-editor';
-import { registerCompletion } from 'monacopilot';
 
 const props = defineProps({
   modelValue: {
@@ -19,6 +23,10 @@ const props = defineProps({
   completionInvoker: {
     type: Function,
     required: true
+  },
+  enableDebug: {
+    type: Boolean,
+    default: false
   }
 });
 const emit = defineEmits(['update:modelValue']);
@@ -27,11 +35,271 @@ const editorContainer = ref(null);
 let editorInstance = null;
 let currentModel = null;
 let errorDecorations = [];
+let completionProvider = null;
 
+// Error handling
 const showError = ref(false);
 const errorMessage = ref('');
 const errorTooltip = ref(null);
 let errorTimeout = null;
+
+// Debug info
+const showDebugInfo = ref(props.enableDebug);
+const pendingRequestCount = ref(0);
+const cacheSize = ref(0);
+const lastCompletionTime = ref(0);
+
+// Advanced completion management
+class CompletionManager {
+  constructor(completionInvoker) {
+    this.completionInvoker = completionInvoker;
+    this.requestId = 0;
+    this.pendingRequests = new Map();
+    this.completionCache = new Map();
+    this.debounceTimer = null;
+    this.lastRequestTime = 0;
+    this.isEnabled = true;
+    
+    // Configuration
+    this.config = {
+      debounceMs: 150,
+      minRequestInterval: 50,
+      maxCacheSize: 100,
+      cacheExpiryMs: 300000, // 5 minutes
+      maxPendingRequests: 3,
+      requestTimeoutMs: 10000, // 10 seconds
+      retryAttempts: 2,
+      retryDelayMs: 1000,
+    };
+    
+    // Cleanup cache periodically
+    this.cleanupInterval = setInterval(() => {
+      this.cleanupCache();
+    }, 60000); // Every minute
+  }
+
+  generateCacheKey(textBeforeCursor, textAfterCursor, language) {
+    // Create a more intelligent cache key that considers context
+    const before = textBeforeCursor.slice(-200); // Last 200 chars
+    const after = textAfterCursor.slice(0, 50); // First 50 chars
+    return `${language}:${before}|${after}`;
+  }
+
+  getCachedCompletion(cacheKey) {
+    const cached = this.completionCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < this.config.cacheExpiryMs) {
+      console.log('[CompletionManager] Cache hit for key:', cacheKey.slice(0, 50) + '...');
+      return cached.completion;
+    }
+    if (cached) {
+      this.completionCache.delete(cacheKey);
+    }
+    return null;
+  }
+
+  setCachedCompletion(cacheKey, completion) {
+    if (this.completionCache.size >= this.config.maxCacheSize) {
+      // Remove oldest entries
+      const entries = Array.from(this.completionCache.entries());
+      entries.sort((a, b) => a[1].timestamp - b[1].timestamp);
+      for (let i = 0; i < 10; i++) {
+        this.completionCache.delete(entries[i][0]);
+      }
+    }
+    
+    this.completionCache.set(cacheKey, {
+      completion,
+      timestamp: Date.now()
+    });
+    cacheSize.value = this.completionCache.size;
+  }
+
+  cleanupCache() {
+    const now = Date.now();
+    const toDelete = [];
+    
+    for (const [key, value] of this.completionCache.entries()) {
+      if (now - value.timestamp > this.config.cacheExpiryMs) {
+        toDelete.push(key);
+      }
+    }
+    
+    toDelete.forEach(key => this.completionCache.delete(key));
+    cacheSize.value = this.completionCache.size;
+    
+    if (toDelete.length > 0) {
+      console.log(`[CompletionManager] Cleaned up ${toDelete.length} expired cache entries`);
+    }
+  }
+
+  async requestCompletion(position, textModel, language = 'cpp') {
+    if (!this.isEnabled) {
+      return null;
+    }
+
+    const currentTime = Date.now();
+    
+    // Rate limiting
+    if (currentTime - this.lastRequestTime < this.config.minRequestInterval) {
+      console.log('[CompletionManager] Rate limited, skipping request');
+      return null;
+    }
+
+    // Get context around cursor
+    const textBeforeCursor = textModel.getValueInRange({
+      startLineNumber: 1,
+      startColumn: 1,
+      endLineNumber: position.lineNumber,
+      endColumn: position.column
+    });
+
+    const textAfterCursor = textModel.getValueInRange({
+      startLineNumber: position.lineNumber,
+      startColumn: position.column,
+      endLineNumber: textModel.getLineCount(),
+      endColumn: textModel.getLineMaxColumn(textModel.getLineCount())
+    });
+
+    // Check cache first
+    const cacheKey = this.generateCacheKey(textBeforeCursor, textAfterCursor, language);
+    const cachedResult = this.getCachedCompletion(cacheKey);
+    if (cachedResult !== null) {
+      return cachedResult;
+    }
+
+    // Prevent too many concurrent requests
+    if (this.pendingRequests.size >= this.config.maxPendingRequests) {
+      console.log('[CompletionManager] Too many pending requests, skipping');
+      return null;
+    }
+
+    const requestId = ++this.requestId;
+    this.lastRequestTime = currentTime;
+    
+    console.log(`[CompletionManager] Starting completion request ${requestId}`);
+    
+    const requestPromise = this.makeCompletionRequest(
+      requestId,
+      textBeforeCursor,
+      textAfterCursor,
+      language,
+      cacheKey
+    );
+    
+    this.pendingRequests.set(requestId, requestPromise);
+    pendingRequestCount.value = this.pendingRequests.size;
+    
+    try {
+      const result = await requestPromise;
+      return result;
+    } finally {
+      this.pendingRequests.delete(requestId);
+      pendingRequestCount.value = this.pendingRequests.size;
+    }
+  }
+
+  async makeCompletionRequest(requestId, textBeforeCursor, textAfterCursor, language, cacheKey) {
+    const startTime = Date.now();
+    
+    for (let attempt = 0; attempt <= this.config.retryAttempts; attempt++) {
+      try {
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Request timeout')), this.config.requestTimeoutMs)
+        );
+
+        const body = {
+          completionMetadata: {
+            textBeforeCursor,
+            textAfterCursor,
+            language,
+            requestId,
+            attempt: attempt + 1
+          }
+        };
+
+        const completionPromise = this.completionInvoker(body);
+        const result = await Promise.race([completionPromise, timeoutPromise]);
+        
+        lastCompletionTime.value = Date.now() - startTime;
+        
+        if (result && result.error) {
+          throw new Error(result.error);
+        }
+
+        const completion = result?.completion;
+        
+        if (typeof completion === 'string' && completion.length > 0) {
+          // Process and clean the completion
+          const processedCompletion = this.processCompletion(completion, textBeforeCursor);
+          
+          // Cache successful result
+          this.setCachedCompletion(cacheKey, processedCompletion);
+          
+          console.log(`[CompletionManager] Request ${requestId} completed successfully in ${Date.now() - startTime}ms`);
+          return processedCompletion;
+        }
+        
+        console.log(`[CompletionManager] Request ${requestId} returned empty completion`);
+        return null;
+        
+      } catch (error) {
+        console.warn(`[CompletionManager] Request ${requestId} attempt ${attempt + 1} failed:`, error.message);
+        
+        if (attempt === this.config.retryAttempts) {
+          throw error;
+        }
+        
+        // Wait before retrying
+        await new Promise(resolve => setTimeout(resolve, this.config.retryDelayMs * (attempt + 1)));
+      }
+    }
+  }
+
+  processCompletion(completion, textBeforeCursor) {
+    // Remove common prefixes/suffixes that might be duplicated
+    let processed = completion;
+    
+    // Remove leading/trailing whitespace that might conflict with editor state
+    processed = processed.trim();
+    
+    // Handle common cases where LLM might repeat the context
+    const lastLine = textBeforeCursor.split('\n').pop() || '';
+    const lastWord = lastLine.trim().split(/\s+/).pop() || '';
+    
+    if (lastWord && processed.startsWith(lastWord)) {
+      processed = processed.slice(lastWord.length);
+    }
+    
+    // Remove any trailing semicolons if the context already ends with one
+    if (textBeforeCursor.trim().endsWith(';') && processed.endsWith(';')) {
+      processed = processed.slice(0, -1);
+    }
+    
+    return processed;
+  }
+
+  disable() {
+    this.isEnabled = false;
+    // Cancel all pending requests
+    this.pendingRequests.clear();
+    pendingRequestCount.value = 0;
+  }
+
+  enable() {
+    this.isEnabled = true;
+  }
+
+  destroy() {
+    this.disable();
+    if (this.cleanupInterval) {
+      clearInterval(this.cleanupInterval);
+    }
+    this.completionCache.clear();
+    cacheSize.value = 0;
+  }
+}
+
+let completionManager = null;
 
 function displayErrorTooltip(message) {
   errorMessage.value = message;
@@ -47,8 +315,75 @@ function dismissErrorTooltip() {
   if (errorTimeout) clearTimeout(errorTimeout);
 }
 
+function createCustomCompletionProvider() {
+  return {
+    triggerCharacters: ['.', '>', ':', '(', ' ', ';', '{', '}', '\n'],
+    
+    provideCompletionItems: async (model, position, context, token) => {
+      if (!completionManager || token.isCancellationRequested) {
+        return { suggestions: [] };
+      }
+
+      try {
+        // Skip completion for certain contexts
+        const lineContent = model.getLineContent(position.lineNumber);
+        const textBeforePosition = lineContent.substring(0, position.column - 1);
+        
+        // Skip if we're in a comment
+        if (textBeforePosition.includes('//') || 
+            (textBeforePosition.includes('/*') && !textBeforePosition.includes('*/'))) {
+          return { suggestions: [] };
+        }
+        
+        // Skip if we're in a string literal
+        const stringMatches = textBeforePosition.match(/"/g);
+        if (stringMatches && stringMatches.length % 2 === 1) {
+          return { suggestions: [] };
+        }
+
+        const completion = await completionManager.requestCompletion(position, model, 'cpp');
+        
+        if (token.isCancellationRequested || !completion) {
+          return { suggestions: [] };
+        }
+
+        // Create Monaco suggestion
+        const suggestion = {
+          label: completion.slice(0, 50) + (completion.length > 50 ? '...' : ''),
+          kind: monaco.languages.CompletionItemKind.Snippet,
+          insertText: completion,
+          insertTextRules: monaco.languages.CompletionItemInsertTextRule.None,
+          range: {
+            startLineNumber: position.lineNumber,
+            endLineNumber: position.lineNumber,
+            startColumn: position.column,
+            endColumn: position.column
+          },
+          detail: 'AI Completion',
+          documentation: 'AI-generated code completion',
+          sortText: '0000', // High priority
+          filterText: completion
+        };
+
+        return {
+          suggestions: [suggestion],
+          incomplete: false
+        };
+        
+      } catch (error) {
+        console.error('[CustomCompletionProvider] Error providing completions:', error);
+        displayErrorTooltip(`Code completion error: ${error.message}`);
+        return { suggestions: [] };
+      }
+    }
+  };
+}
+
 onMounted(async () => {
   if (editorContainer.value) {
+    // Initialize completion manager
+    completionManager = new CompletionManager(props.completionInvoker);
+    
     currentModel = monaco.editor.createModel(
       props.modelValue,
       'cpp',
@@ -78,118 +413,81 @@ onMounted(async () => {
       quickSuggestions: {
         other: true,
         comments: false,
-        strings: true
+        strings: false
       },
-      suggestOnTriggerCharacters: true
+      suggestOnTriggerCharacters: true,
+      wordBasedSuggestions: 'off', // Disable built-in word-based suggestions for better AI completion
+      suggest: {
+        showWords: false,
+        showSnippets: true,
+        showFunctions: true,
+        showKeywords: true,
+        showMethods: true,
+        showProperties: true,
+        showClasses: true,
+        showInterfaces: true,
+        showModules: true,
+        showReferences: true,
+        insertMode: 'replace',
+        filterGraceful: true,
+        localityBonus: true,
+        shareSuggestSelections: false
+      }
     });
 
     currentModel.onDidChangeContent(() => {
       emit('update:modelValue', currentModel.getValue());
     });
 
-    // Log the model URI before registering completion
-    if (editorInstance && editorInstance.getModel()) {
-      // console.log('[MonacoEditor] Model URI before registerCompletion:', editorInstance.getModel().uri.toString());
-    } else {
-      console.warn('[MonacoEditor] Editor instance or model not available before registerCompletion');
-    }
-
-    // Determine the correct endpoint based on the environment
-    // Note: Vite uses import.meta.env.DEV for development check in client-side code
-    const isDevelopment = import.meta.env.DEV;
-    const completionEndpoint = isDevelopment
-      ? 'http://127.0.0.1:5001/emdedr-822d0/us-central1/monacopilotProxy'
-      : 'https://us-central1-emdedr-822d0.cloudfunctions.net/monacopilotProxy';
-    
-    // console.log(`[MonacoEditor] Using completion endpoint: ${completionEndpoint}`);
-
+    // Register custom completion provider
     try {
-      // Possible compatibility issue with monaco-editor v0.52.2 and monacopilot
-      // See: https://github.com/microsoft/monaco-editor/issues/4702
-      
-      // Track completion requests to handle race conditions
-      let lastRequestId = 0;
-      let pendingRequests = {};
-      
-      registerCompletion(monaco, editorInstance, {
-        language: 'cpp',
-        filename: 'current_sketch.cpp',
-        triggerCharacters: [".", ">", ":", "(", " ", "\\n", ";", "{", "}"],
-        triggerMode: 'onChange',
-        completionProvider: 'ghost-text',
-        docFormat: 'plaintext',
-        requestHandler: async ({ body }) => {
-          // console.log('[MonacoEditor] requestHandler received body:', JSON.stringify(body, null, 2));
-          
-          try {
-            if (typeof props.completionInvoker !== 'function') {
-              console.error('[MonacoEditor] props.completionInvoker is not a function.');
-              displayErrorTooltip('Internal error: Completion service invoker not configured.');
-              return { completion: null };
-            }
-
-            const requestId = ++lastRequestId;
-            pendingRequests[requestId] = true;
-            
-            const result = await props.completionInvoker(body);
-            
-            if (lastRequestId !== requestId) {
-              // console.log(`[MonacoEditor] Ignoring completion from request ${requestId} as newer request ${lastRequestId} exists.`);
-              delete pendingRequests[requestId];
-              return { completion: null };
-            }
-            
-            delete pendingRequests[requestId];
-            
-            if (result.error) {
-              console.error('[MonacoEditor] Completion API returned an error via invoker:', result.error);
-              displayErrorTooltip(result.error); 
-              return { completion: null, error: result.error }; 
-            }
-            
-            let finalCompletion = result.completion;
-            // console.log("[MonacoEditor] DIAGNOSTIC - Raw completion from backend:", JSON.stringify(finalCompletion));
-
-            if (typeof finalCompletion !== 'string') {
-              finalCompletion = null;
-              // console.log("[MonacoEditor] DIAGNOSTIC - Completion was not a string, set to null");
-            } else {
-              if (finalCompletion.length === 0) {
-                // console.log("[MonacoEditor] DIAGNOSTIC - Completion is an empty string");
-              }
-            }
-
-            const successResponse = { completion: finalCompletion };
-            // console.log('[MonacoEditor] requestHandler returning to Monacopilot (on success):', successResponse);
-            return successResponse;
-
-          } catch (error) {
-            console.error('[MonacoEditor] Error invoking completion invoker:', error);
-            const message = error instanceof Error ? error.message : 'Unknown error during completion request.';
-            displayErrorTooltip(`Failed to get code completion: ${message}`);
-            // console.log('[MonacoEditor] requestHandler returning to Monacopilot (on catch):', { completion: null, error: message });
-            return { completion: null, error: message };
-          }
-        },
-        onError: (error) => {
-          console.error('[MonacoEditor] Monacopilot onError CALLED. Error object:', error);
-          const errorMessageText = error && error.message ? error.message : (typeof error === 'string' ? error : 'An error occurred with code completion.');
-          displayErrorTooltip(errorMessageText);
-        }
-      });
-      // console.log('[MonacoEditor] Monacopilot registered, using injected invoker for requests.');
+      completionProvider = monaco.languages.registerCompletionItemProvider('cpp', createCustomCompletionProvider());
+      console.log('[MonacoEditor] Custom completion provider registered successfully');
     } catch (error) {
-      console.error('[MonacoEditor] Failed to register Monacopilot:', error);
-      displayErrorTooltip('Autocompletion service failed to initialize.');
+      console.error('[MonacoEditor] Failed to register completion provider:', error);
+      displayErrorTooltip('Failed to initialize AI code completion');
     }
+
+    // Additional editor event handlers for better UX
+    editorInstance.onDidChangeCursorPosition(() => {
+      // Clear error decorations when cursor moves
+      if (errorDecorations.length > 0) {
+        const newDecorations = errorDecorations.filter(decoration => {
+          const range = editorInstance.getModel().getDecorationRange(decoration);
+          const currentPosition = editorInstance.getPosition();
+          return range && (
+            currentPosition.lineNumber < range.startLineNumber ||
+            currentPosition.lineNumber > range.endLineNumber
+          );
+        });
+        
+        if (newDecorations.length !== errorDecorations.length) {
+          errorDecorations = editorInstance.deltaDecorations(errorDecorations, []);
+        }
+      }
+    });
+
+    console.log('[MonacoEditor] Robust completion system initialized');
   }
 });
 
 onBeforeUnmount(() => {
   if (errorTimeout) clearTimeout(errorTimeout);
+  
+  if (completionManager) {
+    completionManager.destroy();
+    completionManager = null;
+  }
+  
+  if (completionProvider) {
+    completionProvider.dispose();
+    completionProvider = null;
+  }
+  
   if (editorInstance) {
     editorInstance.dispose();
   }
+  
   if (currentModel) {
     currentModel.dispose();
   }
@@ -204,6 +502,7 @@ watch(() => props.modelValue, (newValue) => {
 function setErrorLines(lines = []) {
   if (!editorInstance) return;
   if (!currentModel) return;
+  
   const markers = lines.map(line => ({
     startLineNumber: line,
     endLineNumber: line,
@@ -212,10 +511,13 @@ function setErrorLines(lines = []) {
     message: 'Error',
     severity: monaco.MarkerSeverity.Error
   }));
+  
   monaco.editor.setModelMarkers(currentModel, 'owner', markers);
+  
   if (errorDecorations.length > 0) {
     errorDecorations = editorInstance.deltaDecorations(errorDecorations, []);
   }
+  
   if (lines.length > 0) {
     errorDecorations = editorInstance.deltaDecorations([], lines.map(line => ({
       range: new monaco.Range(line, 1, line, currentModel.getLineMaxColumn(line)),
@@ -233,11 +535,25 @@ defineExpose({
   triggerLayout: () => {
     if (editorInstance) {
       editorInstance.layout();
-      // console.log('[MonacoEditor] Layout triggered');
+      console.log('[MonacoEditor] Layout triggered');
     }
   },
   setErrorLines,
-  showErrorTooltip: displayErrorTooltip
+  showErrorTooltip: displayErrorTooltip,
+  toggleDebugInfo: () => {
+    showDebugInfo.value = !showDebugInfo.value;
+  },
+  getCompletionStats: () => ({
+    pendingRequests: pendingRequestCount.value,
+    cacheSize: cacheSize.value,
+    lastCompletionTime: lastCompletionTime.value
+  }),
+  enableCompletion: () => {
+    if (completionManager) completionManager.enable();
+  },
+  disableCompletion: () => {
+    if (completionManager) completionManager.disable();
+  }
 });
 </script>
 
@@ -276,6 +592,23 @@ defineExpose({
   cursor: pointer;
   padding: 0 5px;
 }
+
+.debug-info {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  background-color: rgba(0, 0, 0, 0.8);
+  color: #f0f0f0;
+  padding: 10px;
+  border-radius: 5px;
+  font-family: monospace;
+  font-size: 0.8em;
+  z-index: 1001;
+}
+
+.debug-info div {
+  margin: 2px 0;
+}
 </style>
 
 <style>
@@ -283,5 +616,19 @@ defineExpose({
   background: #ff2d2d !important;
   border-radius: 3px;
   opacity: 0.35;
+}
+
+/* Improve completion suggestion styling */
+.monaco-editor .suggest-widget {
+  border: 1px solid #454545;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+.monaco-editor .suggest-widget .monaco-list .monaco-list-row {
+  border-bottom: 1px solid #333;
+}
+
+.monaco-editor .suggest-widget .monaco-list .monaco-list-row.focused {
+  background-color: #094771;
 }
 </style> 
