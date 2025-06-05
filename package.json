@@ -60,6 +60,7 @@
     "zod": "^3.24.3"
   },
   "devDependencies": {
+    "@electron/rebuild": "^3.7.2",
     "@types/uuid": "^10.0.0",
     "@vitejs/plugin-vue": "^5.2.1",
     "autoprefixer": "^10.4.21",
@@ -85,6 +86,7 @@
     "directories": {
       "output": "dist_electron"
     },
+
     "files": [
       "dist/**/*",
       "main.js",
@@ -124,7 +126,9 @@
     "win": {
       "icon": "build/icons/win/icon.ico",
       "target": "nsis",
-      "artifactName": "${productName} Setup ${version}-${arch}.${ext}"
+      "artifactName": "${productName} Setup ${version}-${arch}.${ext}",
+      "electronUpdaterCompatibility": ">=4.0.0",
+      "verifyUpdateCodeSignature": false
     },
     "linux": {
       "icon": "build/icons",
