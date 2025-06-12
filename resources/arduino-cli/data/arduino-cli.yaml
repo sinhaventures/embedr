@@ -1,0 +1,25 @@
+board_manager:
+    additional_urls: []
+daemon:
+    port: "50051"
+directories:
+    data: .
+    downloads: downloads
+    user: .
+library:
+    enable_unsafe_install: false
+logging:
+    file: ""
+    format: text
+    level: info
+metrics:
+    addr: :9090
+    enabled: true
+network:
+    connection_timeout: 1800s
+output:
+    no_color: false
+sketch:
+    always_export_binaries: false
+updater:
+    enable_notification: true

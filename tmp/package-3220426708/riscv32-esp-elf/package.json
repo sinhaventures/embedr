@@ -1,0 +1,15 @@
+{
+  "name": "riscv32-esp-elf",
+  "version": "14.2.0_20241119",
+  "description": "GNU Toolchain with NewLib for Espressif riscv32 MCUs",
+  "keywords": [
+    "toolchain",
+    "espressif"
+  ],
+  "license": "GPL-2.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/espressif/crosstool-NG"
+  },
+  "system": "windows_amd64"
+}

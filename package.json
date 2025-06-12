@@ -1,0 +1,156 @@
+{
+  "name": "embedr",
+  "private": true,
+  "description": "Embedr - AI Powered Arduino IDE",
+  "author": "Sinha Ventures <support@embedr.cc>",
+  "version": "0.0.6",
+  "type": "commonjs",
+  "main": "main.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "cross-env NODE_ENV=production vite build",
+    "preview": "vite preview",
+    "electron:dev": "cross-env NODE_ENV=production concurrently -k \"vite --host\" \"wait-on tcp:5173 && electron ./main.js\"",
+    "electron:prod": "cross-env NODE_ENV=production concurrently -k \"vite --host\" \"wait-on tcp:5173 && electron ./main.js\"",
+    "electron:build": "cross-env NODE_ENV=production vite build && electron-builder",
+    "electron:build:win:allarch": "cross-env NODE_ENV=production vite build && electron-builder --win --x64 --ia32 --arm64",
+    "electron:start": "cross-env NODE_ENV=production vite build && electron .",
+    "emulators:start": "firebase emulators:start",
+    "dev:emulators": "cross-env NODE_ENV=development concurrently -k \"firebase emulators:start\" \"vite --host\" \"wait-on tcp:5173 && electron ./main.js\"",
+    "prepare-arduino": "node resources/arduino-cli/setup-arduino-cores.js",
+    "build:full": "./setup-and-build.sh",
+    "generate-icons": "electron-icon-builder --input=./public/icon.png --output=build",
+    "postinstall": "electron-builder install-app-deps",
+    "electron:build:win:x64-only": "cross-env NODE_ENV=production vite build && npx electron-builder --win --x64 --publish=never",
+    "build:full:win": "node scripts/setup-windows-build-simple.js",
+    "build:installer:win": "node scripts/build-installer-only.js"
+  },
+  "dependencies": {
+    "@ai-sdk/vue": "^1.2.8",
+    "@langchain/anthropic": "^0.3.19",
+    "@langchain/core": "^0.3.47",
+    "@langchain/google-genai": "^0.2.9",
+    "@langchain/langgraph": "^0.2.67",
+    "@langchain/openai": "^0.5.7",
+    "@vueuse/core": "^13.1.0",
+    "ai": "^4.3.9",
+    "clang-format": "^1.8.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "diff": "^7.0.0",
+    "dompurify": "^3.2.5",
+    "dotenv": "^16.5.0",
+    "electron-squirrel-startup": "^1.0.1",
+    "firebase": "^11.6.0",
+    "highlight.js": "^11.11.1",
+    "langchain": "^0.3.24",
+    "lucide-vue-next": "^0.488.0",
+    "marked": "^15.0.11",
+    "monaco-editor": "^0.52.2",
+    "monacopilot": "^1.1.23",
+    "node-fetch": "^2.7.0",
+    "openai": "^4.95.1",
+    "pinia": "^3.0.2",
+    "radix-vue": "^1.9.17",
+    "reka-ui": "^2.2.0",
+    "serialport": "^12.0.0",
+    "splitpanes": "^4.0.3",
+    "tailwind-merge": "^3.2.0",
+    "tailwindcss-animate": "^1.0.7",
+    "uuid": "^11.1.0",
+    "vue": "^3.5.13",
+    "vue-resizable-panels": "^0.0.1",
+    "vue-router": "^4.5.0",
+    "zod": "^3.24.3"
+  },
+  "devDependencies": {
+    "@types/uuid": "^10.0.0",
+    "@vitejs/plugin-vue": "^5.2.1",
+    "autoprefixer": "^10.4.21",
+    "concurrently": "^9.1.2",
+    "cross-env": "^7.0.3",
+    "electron": "^29.1.0",
+    "electron-builder": "^24.13.3",
+    "electron-icon-builder": "^2.0.1",
+    "firebase-tools": "^13.35.1",
+    "postcss": "^8.5.3",
+    "postcss-import": "^16.1.0",
+    "postcss-nested": "^7.0.2",
+    "postcss-nesting": "^13.0.1",
+    "postcss-preset-env": "^10.1.5",
+    "tailwindcss": "^3.4.17",
+    "vite": "^6.2.0",
+    "vite-plugin-monaco-editor": "^1.1.0",
+    "wait-on": "^8.0.3"
+  },
+  "build": {
+    "appId": "com.embedr.app",
+    "productName": "Embedr",
+    "directories": {
+      "output": "dist_electron"
+    },
+    "asar": false,
+    "nodeGypRebuild": false,
+    "buildDependenciesFromSource": false,
+    "files": [
+      "dist/**/*",
+      "main.js",
+      "preload.js",
+      "src/main/**/*",
+      "!src/assets/**/*",
+      "!src/components/**/*",
+      "!src/composables/**/*",
+      "!src/router/**/*",
+      "!src/App.vue",
+      "!src/index.css",
+      "!src/main.js",
+      "agent-tools.js"
+    ],
+    "extraResources": [
+      {
+        "from": "resources/arduino-cli/bin/${os}",
+        "to": "arduino-cli/bin/${os}",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "resources/arduino-cli/data",
+        "to": "arduino-cli/data",
+        "filter": [
+          "**/*"
+        ]
+      },
+      "systemprompt.md",
+      "projects.json"
+    ],
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "icon": "build/icons/mac/icon.icns"
+    },
+    "win": {
+      "icon": "build/icons/win/icon.ico",
+      "target": {
+        "target": "nsis",
+        "arch": ["x64"]
+      },
+      "artifactName": "${productName} Setup ${version}-${arch}.${ext}",
+      "electronUpdaterCompatibility": ">=4.0.0",
+      "verifyUpdateCodeSignature": false,
+      "signDlls": false
+    },
+    "linux": {
+      "icon": "build/icons",
+      "category": "Development"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "allowElevation": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "perMachine": false,
+      "deleteAppDataOnUninstall": false
+    }
+  }
+}
