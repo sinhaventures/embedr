@@ -24,7 +24,7 @@
                 'flex-1 py-2 px-3 transition-all rounded-md',
                 activeTab === tab 
                   ? 'bg-[#323234] text-white shadow-sm' 
-                  : 'text-[#EBEBF5]/60 hover:text-[#EBEBF5]'
+                  : 'bg-transparent text-[#EBEBF5]/60 hover:text-[#EBEBF5] hover:bg-[#2A2A2A]/50'
               ]"
             >
               {{ tab }}

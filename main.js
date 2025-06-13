@@ -291,6 +291,30 @@ if (!fs.existsSync(arduinoConfigFile)) {
   console.error(`ERROR: Bundled arduino-cli config not found at ${arduinoConfigFile}. Make sure it was created by the setup.`);
 }
 
+// Ensure Arduino CLI is configured with extended network timeout
+async function ensureArduinoCliTimeout() {
+  try {
+    console.log('[setup] Configuring Arduino CLI network timeout...');
+    const timeoutCommand = `"${arduinoCliPath}" config set network.connection_timeout 1800s --config-file "${arduinoConfigFile}"`;
+    await new Promise((resolve, reject) => {
+      exec(timeoutCommand, (error, stdout, stderr) => {
+        if (error) {
+          console.warn('[setup] Failed to set Arduino CLI timeout:', error.message);
+          reject(error);
+        } else {
+          console.log('[setup] Arduino CLI network timeout set to 30 minutes');
+          resolve(stdout);
+        }
+      });
+    });
+  } catch (error) {
+    console.warn('[setup] Could not configure Arduino CLI timeout:', error.message);
+  }
+}
+
+// Configure Arduino CLI timeout on startup  
+ensureArduinoCliTimeout();
+
 ipcMain.handle('compile-sketch', async (event, baseFqbn, options, sketchPath) => { // Added options, adjusted order
   console.log('[compile-sketch] Handler called with:', { baseFqbn, options, sketchPath });
   
@@ -713,13 +737,70 @@ ipcMain.handle('lib-update-index', async () => {
 
 ipcMain.handle('core-update-index', async () => {
   return new Promise((resolve) => {
-    const command = `"${arduinoCliPath}" core update-index --format json --config-file "${arduinoConfigFile}" --config-dir "${arduinoDataDir}"`;
-    exec(command, (error, stdout, stderr) => {
-      if (error) {
-        resolve({ success: false, error: stderr || error.message });
-        return;
+    const args = [
+      'core', 'update-index',
+      '--format', 'json',
+      '--config-file', arduinoConfigFile,
+      '--config-dir', arduinoDataDir
+    ];
+    
+    console.log(`[core-update-index] Executing: ${arduinoCliPath} ${args.join(' ')}`);
+    
+    // Note: Arduino CLI timeout is configured in the config file via network.connection_timeout
+    
+    const childProcess = spawn(arduinoCliPath, args, {
+      stdio: ['pipe', 'pipe', 'pipe'],
+      shell: true
+    });
+
+    let stdout = '';
+    let stderr = '';
+    
+    // Set up a 10 minute timeout for the entire operation
+    const timeout = setTimeout(() => {
+      console.log(`[core-update-index] Operation timed out after 10 minutes`);
+      childProcess.kill('SIGTERM');
+    }, 10 * 60 * 1000);
+
+    childProcess.stdout.on('data', (data) => {
+      const output = data.toString();
+      stdout += output;
+      console.log(`[core-update-index] stdout: ${output.trim()}`);
+    });
+
+    childProcess.stderr.on('data', (data) => {
+      const output = data.toString();
+      stderr += output;
+      console.log(`[core-update-index] stderr: ${output.trim()}`);
+    });
+
+    childProcess.on('close', (code) => {
+      clearTimeout(timeout);
+      console.log(`[core-update-index] Process exited with code: ${code}`);
+      
+      if (code === 0) {
+        resolve({ success: true, output: stdout });
+      } else {
+        let errorMessage = stderr || `Process exited with code ${code}`;
+        
+        // Parse error message from stderr JSON if possible
+        try {
+          const stderrJson = JSON.parse(stderr);
+          if (stderrJson.error) {
+            errorMessage = stderrJson.error;
+          }
+        } catch (e) {
+          // If it's not valid JSON, use as-is
+        }
+        
+        resolve({ success: false, error: errorMessage });
       }
-      resolve({ success: true, output: stdout });
+    });
+
+    childProcess.on('error', (error) => {
+      clearTimeout(timeout);
+      console.error(`[core-update-index] Process error:`, error);
+      resolve({ success: false, error: error.message });
     });
   });
 });
@@ -745,7 +826,10 @@ ipcMain.handle('core-list', async () => {
 ipcMain.handle('core-search', async (event, query) => {
   return new Promise((resolve) => {
     const command = `"${arduinoCliPath}" core search "${query}" --format json --config-file "${arduinoConfigFile}" --config-dir "${arduinoDataDir}"`;
-    exec(command, { maxBuffer: 1024 * 1024 * 10 }, (error, stdout, stderr) => {
+    exec(command, { 
+      maxBuffer: 1024 * 1024 * 10,
+      timeout: 2 * 60 * 1000 // 2 minutes timeout for searches
+    }, (error, stdout, stderr) => {
       if (error) {
         resolve({ success: false, error: stderr || error.message });
         return;
@@ -763,50 +847,174 @@ ipcMain.handle('core-search', async (event, query) => {
 ipcMain.handle('core-install', async (event, platformPackage) => {
   console.log(`[core-install] Installing core: ${platformPackage}`);
   
-  return new Promise((resolve) => {
-    const quotedPackageName = `"${platformPackage}"`;
-    const command = `"${arduinoCliPath}" core install ${quotedPackageName} --format json --config-file "${arduinoConfigFile}" --config-dir "${arduinoDataDir}"`;
-    
-    console.log(`[core-install] Executing command: ${command}`);
-    const childProcess = exec(command, { maxBuffer: 1024 * 1024 * 10 }, (error, stdout, stderr) => {
-      if (error) {
-        console.error('[core-install] Installation error:', error);
-        console.error('[core-install] stderr:', stderr);
-        resolve({ success: false, error: stderr || error.message, output: stdout });
-        return;
-      }
+  const attemptInstallation = (attempt = 1, maxAttempts = 3) => {
+    return new Promise((resolve) => {
+      const args = [
+        'core', 'install', platformPackage,
+        '--format', 'json',
+        '--config-file', arduinoConfigFile,
+        '--config-dir', arduinoDataDir
+      ];
       
-      console.log('[core-install] stdout:', stdout);
-      if (stderr) console.warn('[core-install] stderr (non-fatal):', stderr);
+      console.log(`[core-install] Attempt ${attempt}/${maxAttempts} - Executing: ${arduinoCliPath} ${args.join(' ')}`);
       
-      try {
-        let resultData = {};
-        if (stdout.trim()) {
-          resultData = JSON.parse(stdout);
+      // Note: Arduino CLI timeout is configured in the config file via network.connection_timeout
+      
+      const childProcess = spawn(arduinoCliPath, args, {
+        stdio: ['pipe', 'pipe', 'pipe'],
+        shell: true
+      });
+
+      let stdout = '';
+      let stderr = '';
+      let isProcessing = false;
+
+      childProcess.stdout.on('data', (data) => {
+        const output = data.toString();
+        stdout += output;
+        isProcessing = true;
+        console.log(`[core-install] stdout: ${output.trim()}`);
+        
+        // Send real-time progress to frontend
+        if (mainWindow) {
+          mainWindow.webContents.send('core-install-progress', { 
+            type: 'stdout', 
+            data: output,
+            timestamp: new Date().toISOString(),
+            status: 'installing'
+          });
         }
-        resolve({ success: true, output: resultData });
-      } catch (parseErr) {
-        console.warn('[core-install] Failed to parse output as JSON:', parseErr);
-        resolve({ success: true, output: stdout }); // Still consider it a success but return raw output
-      }
-    });
+      });
 
-    // Log real-time output
-    childProcess.stdout.on('data', (data) => {
-      console.log(`[core-install] Real-time stdout: ${data}`);
-      // We could potentially send progress updates to the renderer here
-      if (mainWindow) {
-        mainWindow.webContents.send('core-install-progress', { type: 'stdout', data: data.toString() });
-      }
-    });
+      childProcess.stderr.on('data', (data) => {
+        const output = data.toString();
+        stderr += output;
+        isProcessing = true;
+        console.log(`[core-install] stderr: ${output.trim()}`);
+        
+        // Send real-time progress to frontend
+        if (mainWindow) {
+          mainWindow.webContents.send('core-install-progress', { 
+            type: 'stderr', 
+            data: output,
+            timestamp: new Date().toISOString(),
+            status: 'installing'
+          });
+        }
+      });
 
-    childProcess.stderr.on('data', (data) => {
-      console.log(`[core-install] Real-time stderr: ${data}`);
-      if (mainWindow) {
-        mainWindow.webContents.send('core-install-progress', { type: 'stderr', data: data.toString() });
-      }
+      childProcess.on('close', (code) => {
+        console.log(`[core-install] Process exited with code: ${code}`);
+        
+        // Send final status to frontend
+        if (mainWindow) {
+          mainWindow.webContents.send('core-install-progress', { 
+            type: 'status', 
+            data: `Process completed with code ${code}`,
+            timestamp: new Date().toISOString(),
+            status: code === 0 ? 'completed' : 'failed',
+            code
+          });
+        }
+        
+        if (code === 0) {
+          console.log('[core-install] Installation completed successfully');
+          
+          // Send success notification to frontend
+          if (mainWindow) {
+            mainWindow.webContents.send('core-install-progress', { 
+              type: 'success', 
+              data: `Successfully installed ${platformPackage}`,
+              timestamp: new Date().toISOString(),
+              status: 'success'
+            });
+          }
+          
+          try {
+            let resultData = {};
+            if (stdout.trim()) {
+              resultData = JSON.parse(stdout);
+            }
+            resolve({ success: true, output: resultData, message: `Successfully installed ${platformPackage}` });
+          } catch (parseErr) {
+            console.warn('[core-install] Failed to parse output as JSON:', parseErr);
+            resolve({ success: true, output: stdout, message: `Successfully installed ${platformPackage}` });
+          }
+        } else {
+          console.error(`[core-install] Installation failed (attempt ${attempt})`);
+          console.error('[core-install] stderr:', stderr);
+          
+          // Parse error message from stderr JSON if possible
+          let errorMessage = stderr;
+          try {
+            const stderrJson = JSON.parse(stderr);
+            if (stderrJson.error) {
+              errorMessage = stderrJson.error;
+            }
+          } catch (e) {
+            // If it's not valid JSON, use raw stderr
+            errorMessage = stderr || `Installation failed with exit code ${code}`;
+          }
+          
+          // Send error notification to frontend
+          if (mainWindow) {
+            mainWindow.webContents.send('core-install-progress', { 
+              type: 'error', 
+              data: errorMessage,
+              timestamp: new Date().toISOString(),
+              status: 'error'
+            });
+          }
+          
+          // Only retry on specific network-related errors and if we haven't reached max attempts
+          if (attempt < maxAttempts && (
+            errorMessage.includes('network') ||
+            errorMessage.includes('connection') ||
+            errorMessage.includes('timeout') ||
+            errorMessage.includes('context deadline exceeded') ||
+            errorMessage.includes('request canceled')
+          )) {
+            console.log(`[core-install] Retrying installation (attempt ${attempt + 1}/${maxAttempts}) after network error...`);
+            
+            // Send retry notification to frontend
+            if (mainWindow) {
+              mainWindow.webContents.send('core-install-progress', { 
+                type: 'retry', 
+                data: `Retrying installation (attempt ${attempt + 1}/${maxAttempts})...`,
+                timestamp: new Date().toISOString(),
+                status: 'retrying'
+              });
+            }
+            
+            setTimeout(() => {
+              attemptInstallation(attempt + 1, maxAttempts).then(resolve);
+            }, 3000);
+            return;
+          }
+          
+          resolve({ success: false, error: errorMessage, output: stdout });
+        }
+      });
+
+      childProcess.on('error', (error) => {
+        console.error(`[core-install] Process error:`, error);
+        
+        // Send error notification to frontend
+        if (mainWindow) {
+          mainWindow.webContents.send('core-install-progress', { 
+            type: 'error', 
+            data: `Process error: ${error.message}`,
+            timestamp: new Date().toISOString(),
+            status: 'error'
+          });
+        }
+        
+        resolve({ success: false, error: error.message, output: stdout });
+      });
     });
-  });
+  };
+  
+  return attemptInstallation();
 });
 
 ipcMain.handle('core-uninstall', async (event, platformPackage) => {
@@ -831,25 +1039,77 @@ ipcMain.handle('core-uninstall', async (event, platformPackage) => {
 });
 
 ipcMain.handle('core-upgrade', async (event, platformPackage) => {
-  const upgradeCommand = platformPackage 
-    ? `"${arduinoCliPath}" core upgrade "${platformPackage}" --format json --config-file "${arduinoConfigFile}" --config-dir "${arduinoDataDir}"`
-    : `"${arduinoCliPath}" core upgrade --format json --config-file "${arduinoConfigFile}" --config-dir "${arduinoDataDir}"`; // Upgrade all if no package specified
+  const args = platformPackage 
+    ? ['core', 'upgrade', platformPackage, '--format', 'json', '--config-file', arduinoConfigFile, '--config-dir', arduinoDataDir]
+    : ['core', 'upgrade', '--format', 'json', '--config-file', arduinoConfigFile, '--config-dir', arduinoDataDir]; // Upgrade all if no package specified
+  
+  console.log(`[core-upgrade] Executing: ${arduinoCliPath} ${args.join(' ')}`);
   
   return new Promise((resolve) => {
-    exec(upgradeCommand, { maxBuffer: 1024 * 1024 * 10 }, (error, stdout, stderr) => {
-      if (error) {
-        resolve({ success: false, error: stderr || error.message });
-        return;
-      }
-      try {
-        let resultData = {};
-        if (stdout.trim()) {
-          resultData = JSON.parse(stdout);
+    // Note: Arduino CLI timeout is configured in the config file via network.connection_timeout
+    
+    const childProcess = spawn(arduinoCliPath, args, {
+      stdio: ['pipe', 'pipe', 'pipe'],
+      shell: true
+    });
+
+    let stdout = '';
+    let stderr = '';
+    
+    // Set up a 15 minute timeout for the entire operation
+    const timeout = setTimeout(() => {
+      console.log(`[core-upgrade] Operation timed out after 15 minutes`);
+      childProcess.kill('SIGTERM');
+    }, 15 * 60 * 1000);
+
+    childProcess.stdout.on('data', (data) => {
+      const output = data.toString();
+      stdout += output;
+      console.log(`[core-upgrade] stdout: ${output.trim()}`);
+    });
+
+    childProcess.stderr.on('data', (data) => {
+      const output = data.toString();
+      stderr += output;
+      console.log(`[core-upgrade] stderr: ${output.trim()}`);
+    });
+
+    childProcess.on('close', (code) => {
+      clearTimeout(timeout);
+      console.log(`[core-upgrade] Process exited with code: ${code}`);
+      
+      if (code === 0) {
+        try {
+          let resultData = {};
+          if (stdout.trim()) {
+            resultData = JSON.parse(stdout);
+          }
+          resolve({ success: true, output: resultData });
+        } catch (parseErr) {
+          console.warn('[core-upgrade] Failed to parse output as JSON:', parseErr);
+          resolve({ success: true, output: stdout });
         }
-        resolve({ success: true, output: resultData });
-      } catch (parseErr) {
-        resolve({ success: true, output: stdout }); // Still consider it a success but return raw output
+      } else {
+        let errorMessage = stderr || `Process exited with code ${code}`;
+        
+        // Parse error message from stderr JSON if possible
+        try {
+          const stderrJson = JSON.parse(stderr);
+          if (stderrJson.error) {
+            errorMessage = stderrJson.error;
+          }
+        } catch (e) {
+          // If it's not valid JSON, use as-is
+        }
+        
+        resolve({ success: false, error: errorMessage });
       }
+    });
+
+    childProcess.on('error', (error) => {
+      clearTimeout(timeout);
+      console.error(`[core-upgrade] Process error:`, error);
+      resolve({ success: false, error: error.message });
     });
   });
 });

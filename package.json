@@ -3,14 +3,14 @@
   "private": true,
   "description": "Embedr - AI Powered Arduino IDE",
   "author": "Sinha Ventures <support@embedr.cc>",
-  "version": "0.0.4",
+  "version": "0.0.6",
   "type": "commonjs",
   "main": "main.js",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "cross-env NODE_ENV=production vite build",
     "preview": "vite preview",
-    "electron:dev": "cross-env NODE_ENV=development concurrently -k \"vite --host\" \"wait-on tcp:5173 && electron ./main.js\"",
+    "electron:dev": "cross-env NODE_ENV=production concurrently -k \"vite --host\" \"wait-on tcp:5173 && electron ./main.js\"",
     "electron:prod": "cross-env NODE_ENV=production concurrently -k \"vite --host\" \"wait-on tcp:5173 && electron ./main.js\"",
     "electron:build": "cross-env NODE_ENV=production vite build && electron-builder",
     "electron:build:win:allarch": "cross-env NODE_ENV=production vite build && electron-builder --win --x64 --ia32 --arm64",
@@ -19,7 +19,11 @@
     "dev:emulators": "cross-env NODE_ENV=development concurrently -k \"firebase emulators:start\" \"vite --host\" \"wait-on tcp:5173 && electron ./main.js\"",
     "prepare-arduino": "node resources/arduino-cli/setup-arduino-cores.js",
     "build:full": "./setup-and-build.sh",
-    "generate-icons": "electron-icon-builder --input=./public/icon.png --output=build"
+    "generate-icons": "electron-icon-builder --input=./public/icon.png --output=build",
+    "postinstall": "electron-builder install-app-deps",
+    "electron:build:win:x64-only": "cross-env NODE_ENV=production vite build && npx electron-builder --win --x64 --publish=never",
+    "build:full:win": "node scripts/setup-windows-build-simple.js",
+    "build:installer:win": "node scripts/build-installer-only.js"
   },
   "dependencies": {
     "@ai-sdk/vue": "^1.2.8",
@@ -60,7 +64,6 @@
     "zod": "^3.24.3"
   },
   "devDependencies": {
-    "@electron/rebuild": "^3.7.2",
     "@types/uuid": "^10.0.0",
     "@vitejs/plugin-vue": "^5.2.1",
     "autoprefixer": "^10.4.21",
@@ -86,7 +89,9 @@
     "directories": {
       "output": "dist_electron"
     },
-
+    "asar": false,
+    "nodeGypRebuild": false,
+    "buildDependenciesFromSource": false,
     "files": [
       "dist/**/*",
       "main.js",
@@ -125,18 +130,27 @@
     },
     "win": {
       "icon": "build/icons/win/icon.ico",
-      "target": "nsis",
+      "target": {
+        "target": "nsis",
+        "arch": ["x64"]
+      },
       "artifactName": "${productName} Setup ${version}-${arch}.${ext}",
       "electronUpdaterCompatibility": ">=4.0.0",
-      "verifyUpdateCodeSignature": false
+      "verifyUpdateCodeSignature": false,
+      "signDlls": false
     },
     "linux": {
       "icon": "build/icons",
       "category": "Development"
     },
     "nsis": {
-      "oneClick": true,
-      "perMachine": false
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "allowElevation": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "perMachine": false,
+      "deleteAppDataOnUninstall": false
     }
   }
 }

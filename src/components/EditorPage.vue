@@ -375,6 +375,14 @@
       <PanelResizeHandle class="vrp-handle-vertical" />
       <Panel :defaultSize="35" :minSize="20" :maxSize="70">
         <!-- Co-pilot Section (Right) -->
+        <!-- Fallback when CopilotChat is not rendered -->
+        <div v-if="!currentProject || !currentProject.dir" class="h-full flex items-center justify-center p-4 text-muted-foreground bg-[#1a1a1a]">
+          <div class="text-center">
+            <p class="text-lg mb-2">AI Copilot</p>
+            <p class="text-sm">Open a project to start chatting with the AI assistant</p>
+          </div>
+        </div>
+        
         <CopilotChat 
           ref="copilotChatRef"
           v-if="currentProject && currentProject.dir"
@@ -706,7 +714,9 @@ async function openProject(project) {
   // If only ino is provided, derive dir
   let dir = project.dir;
   if (!dir && project.ino) {
-    dir = project.ino.substring(0, project.ino.lastIndexOf('/'));
+    // Handle both Windows (\) and Unix (/) path separators
+    const lastSeparatorIndex = Math.max(project.ino.lastIndexOf('/'), project.ino.lastIndexOf('\\'));
+    dir = project.ino.substring(0, lastSeparatorIndex);
   }
   currentProject.value = { ...project, dir };
   currentInoPath.value = project.ino;
@@ -1000,6 +1010,22 @@ async function fetchBoardsAndPorts() {
   }
 }
 
+// Handle core installation/uninstallation events
+function handleCoreInstalled(event) {
+  console.log(`[EditorPage] Core installed: ${event.detail}, refreshing board list...`);
+  fetchBoardsAndPorts();
+}
+
+function handleCoreUninstalled(event) {
+  console.log(`[EditorPage] Core uninstalled: ${event.detail}, refreshing board list...`);
+  fetchBoardsAndPorts();
+}
+
+function handleCoreUpgraded(event) {
+  console.log(`[EditorPage] Core upgraded: ${event.detail}, refreshing board list...`);
+  fetchBoardsAndPorts();
+}
+
 onMounted(async () => {
   console.log('[EditorPage] onMounted hook started.');
   // Log the electronAPI object *before* trying to use it
@@ -1033,14 +1059,19 @@ onMounted(async () => {
         originalContent.value = contentFromIno;
         currentInoPath.value = ino;
         // Extract the project object from the path
-        const dir = ino.substring(0, ino.lastIndexOf('/'));
-        const name = dir.substring(dir.lastIndexOf('/') + 1);
+        // Handle both Windows (\) and Unix (/) path separators
+        const lastSeparatorIndex = Math.max(ino.lastIndexOf('/'), ino.lastIndexOf('\\'));
+        const dir = ino.substring(0, lastSeparatorIndex);
+        const lastDirSeparatorIndex = Math.max(dir.lastIndexOf('/'), dir.lastIndexOf('\\'));
+        const name = dir.substring(lastDirSeparatorIndex + 1);
         currentProject.value = {
           name,
           dir,
           ino,
           created: ''
         };
+        console.log('[EditorPage] Set currentProject:', currentProject.value);
+        console.log('[EditorPage] currentProject.dir is:', currentProject.value.dir);
         // Set window title to "{project-name} - Embedr"
         if (window.electronAPI && typeof window.electronAPI.setWindowTitle === 'function') {
           window.electronAPI.setWindowTitle(`${name} - Embedr`);
@@ -1096,6 +1127,11 @@ onMounted(async () => {
   // Setup listeners for agent selection
   setupIPCListeners();
   
+  // Listen for global events that indicate boards should be refreshed
+  window.addEventListener('core-installed', handleCoreInstalled);
+  window.addEventListener('core-uninstalled', handleCoreUninstalled);
+  window.addEventListener('core-upgraded', handleCoreUpgraded);
+  
   // Load code (if not already loaded)
   // await loadCode(); 
 
@@ -1104,6 +1140,11 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleKeyDown);
+  
+  // Clean up global event listeners
+  window.removeEventListener('core-installed', handleCoreInstalled);
+  window.removeEventListener('core-uninstalled', handleCoreUninstalled);
+  window.removeEventListener('core-upgraded', handleCoreUpgraded);
   
   // Clear file change listener
   if (window.electronAPI && window.electronAPI.clearFileChangeListener) {

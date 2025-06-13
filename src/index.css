@@ -153,5 +153,130 @@ button:focus-visible {
 }
 
 .tab_switching_bar  button.text-muted-foreground{
-    background-color: #00000000 !important;
+    background-color: transparent !important;
+}
+
+/* Fix for Windows 10 rendering issues where transparent becomes white */
+.tab_switching_bar button:not(.bg-\[--333\]):not(.bg-background) {
+    background-color: #252525 !important;
+}
+
+/* Ensure active tabs maintain their styling */
+.tab_switching_bar button.bg-\[--333\],
+.tab_switching_bar button.bg-background {
+    background-color: #333 !important;
+}
+
+/* Windows 10 compatibility: Fix for transparent backgrounds rendering as white */
+.bg-transparent {
+    background-color: rgba(0, 0, 0, 0) !important;
+    background-image: none !important;
+}
+
+/* Specific fix for Windows 10 Chromium rendering */
+@media screen and (-ms-high-contrast: none), (-ms-high-contrast: active) {
+    /* IE11 and Edge Legacy */
+    .bg-transparent {
+        background-color: transparent !important;
+    }
+}
+
+/* Modern Chromium/WebKit fix for Windows 10 */
+@supports (backdrop-filter: blur(0px)) {
+    .bg-transparent {
+        backdrop-filter: none !important;
+        background-color: rgba(0, 0, 0, 0) !important;
+    }
+    
+    /* Ensure tab buttons render correctly */
+    button.bg-transparent:not(:hover) {
+        background: none !important;
+        background-color: rgba(0, 0, 0, 0) !important;
+    }
+}
+
+/* Electron-specific fixes for Windows rendering */
+.electron-app .bg-transparent,
+body.electron .bg-transparent {
+    background: none !important;
+    background-color: transparent !important;
+    background-image: none !important;
+}
+
+/* TARGETED FIXES FOR SPECIFIC PROBLEMATIC BUTTONS ON WINDOWS 10 */
+
+/* EditorPage: Back button fix */
+button.text-muted-foreground.hover\:text-foreground.flex.items-center.gap-2.text-sm.font-medium.transition-colors {
+    background-color: transparent !important;
+    background-image: none !important;
+}
+
+/* EditorPage: Library Manager and Version History buttons (ghost variant) */
+button[aria-label="Manage Libraries"].relative.group,
+button[aria-label="Version History"].relative.group {
+    background-color: transparent !important;
+    background-image: none !important;
+}
+
+button[aria-label="Manage Libraries"].relative.group:hover,
+button[aria-label="Version History"].relative.group:hover {
+    background-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+/* HomePage: Attach button fix */
+button.text-gray-400.hover\:text-white.transition-colors.p-1[title="Attach Image"] {
+    background-color: transparent !important;
+    background-image: none !important;
+}
+
+/* HomePage: Create Blank Project button fix */
+button.flex.items-center.gap-2.px-4.py-2.rounded-lg.hover\:bg-\[--1A1A1A\].transition-colors.group {
+    background-color: transparent !important;
+    background-image: none !important;
+}
+
+button.flex.items-center.gap-2.px-4.py-2.rounded-lg.hover\:bg-\[--1A1A1A\].transition-colors.group:hover {
+    background-color: #1A1A1A !important;
+}
+
+/* HomePage: Modal Cancel buttons */
+button.flex-1.border-white\/10.text-white\/90.hover\:bg-white\/5 {
+    background-color: transparent !important;
+    background-image: none !important;
+}
+
+button.flex-1.border-white\/10.text-white\/90.hover\:bg-white\/5:hover {
+    background-color: rgba(255, 255, 255, 0.05) !important;
+}
+
+/* MODAL CLOSE BUTTONS FIXES */
+
+/* DialogContent close button (X button in top-right) */
+button.absolute.right-4.top-4.rounded-sm.opacity-70.ring-offset-background.transition-opacity {
+    background-color: transparent !important;
+    background-image: none !important;
+}
+
+button.absolute.right-4.top-4.rounded-sm.opacity-70.ring-offset-background.transition-opacity:hover {
+    background-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+/* SettingsModal close button */
+button.absolute.top-4.right-4.text-white\/60.hover\:text-white.transition-colors.p-1\.5.rounded-full.hover\:bg-white\/10.z-10 {
+    background-color: transparent !important;
+    background-image: none !important;
+}
+
+button.absolute.top-4.right-4.text-white\/60.hover\:text-white.transition-colors.p-1\.5.rounded-full.hover\:bg-white\/10.z-10:hover {
+    background-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+/* CoreManagerModal close button */
+button.rounded-full.p-1\.5.hover\:bg-white\/10.transition-colors[aria-label="Close"] {
+    background-color: transparent !important;
+    background-image: none !important;
+}
+
+button.rounded-full.p-1\.5.hover\:bg-white\/10.transition-colors[aria-label="Close"]:hover {
+    background-color: rgba(255, 255, 255, 0.1) !important;
 }

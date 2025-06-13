@@ -322,7 +322,13 @@
       />
 
       <!-- Board Manager Modal -->
-      <CoreManagerModal :show="showCoreManagerModal" @close="showCoreManagerModal = false" />
+      <CoreManagerModal 
+        :show="showCoreManagerModal" 
+        @close="showCoreManagerModal = false"
+        @core-installed="handleCoreInstalled"
+        @core-uninstalled="handleCoreUninstalled"
+        @core-upgraded="handleCoreUpgraded"
+      />
     </div>
   </div>
 </template>
@@ -461,6 +467,28 @@ async function fetchBoards() {
 watch(selectedBoard, (newValue) => {
   localStorage.setItem(LOCALSTORAGE_BOARD_KEY_HOME, newValue || '');
 });
+
+// Handle core installation/uninstallation events from CoreManagerModal
+function handleCoreInstalled(platformId) {
+  console.log(`[HomePage] Core installed: ${platformId}, refreshing board list...`);
+  fetchBoards();
+  // Dispatch global event to notify other components
+  window.dispatchEvent(new CustomEvent('core-installed', { detail: platformId }));
+}
+
+function handleCoreUninstalled(platformId) {
+  console.log(`[HomePage] Core uninstalled: ${platformId}, refreshing board list...`);
+  fetchBoards();
+  // Dispatch global event to notify other components
+  window.dispatchEvent(new CustomEvent('core-uninstalled', { detail: platformId }));
+}
+
+function handleCoreUpgraded(platformId) {
+  console.log(`[HomePage] Core upgraded: ${platformId}, refreshing board list...`);
+  fetchBoards();
+  // Dispatch global event to notify other components
+  window.dispatchEvent(new CustomEvent('core-upgraded', { detail: platformId }));
+}
 
 // Function to auto-resize textarea based on content
 function autoResizeTextarea() {

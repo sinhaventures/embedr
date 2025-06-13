@@ -54,7 +54,7 @@
           <!-- Installed & Search Tab -->
           <div v-if="activeTab === 'installed'">
             <!-- Control Bar - Search and Update -->
-            <div class="flex flex-wrap items-center justify-between gap-4 bg-[#252525] rounded-lg p-3 border border-[#333] mb-3" style="background-color: #252525 !important; border-color: #333 !important;">
+            <div class="flex flex-wrap items-center justify-between gap-4 bg-[#252525] rounded-lg p-4 border border-[#333] mb-4" style="background-color: #252525 !important; border-color: #333 !important;">
               <div class="flex items-center gap-3">
                 <Button @click="updateIndex" :disabled="isUpdating || isCheckingUpdates || isUpdatingAll" variant="outline" size="sm" class="whitespace-nowrap h-9">
                   <RefreshCcw v-if="isUpdating" class="h-4 w-4 animate-spin mr-2" />
@@ -106,7 +106,7 @@
 
             <!-- Status Messages -->
             <div v-if="statusMessage" 
-                 :class="['p-4 rounded-lg text-sm mb-3', 
+                 :class="['p-4 rounded-lg text-sm mb-4', 
                          statusType === 'error' ? 'bg-red-900/30 text-red-300 border border-red-500/50' : 
                          statusType === 'success' ? 'bg-green-900/30 text-green-300 border border-green-500/50' : 
                          'bg-blue-900/30 text-blue-300 border border-blue-500/50']">
@@ -114,12 +114,12 @@
             </div>
 
             <!-- Loading Indicator -->
-            <div v-if="isLoading && !searchResults.length && !installedCores.length" class="flex justify-center items-center py-12">
+            <div v-if="isLoading && !searchResults.length && !installedCores.length" class="flex justify-center items-center py-12 mb-4">
               <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-white/30"></div>
             </div>
 
             <!-- Progress for installation -->
-            <div v-if="showProgress" class="bg-[#1E1E1E] border border-[#333] rounded-lg p-4" style="background-color: #1E1E1E !important; border-color: #333 !important;">
+            <div v-if="showProgress" class="bg-[#1E1E1E] border border-[#333] rounded-lg p-4 mb-4" style="background-color: #1E1E1E !important; border-color: #333 !important;">
               <div class="flex items-center justify-between mb-2">
                 <div class="flex items-center gap-2">
                   <Loader2 class="h-5 w-5 animate-spin text-blue-400" />
@@ -137,15 +137,20 @@
               </div>
               
               <!-- Progress Log -->
-              <div v-if="progressLog.length" class="mt-2 bg-black/30 rounded p-2 max-h-28 overflow-y-auto text-xs font-mono">
-                <div v-for="(log, index) in progressLog" :key="index" :class="log.type === 'stderr' ? 'text-red-400' : 'text-green-400'">
+              <div v-if="progressLog.length" class="mt-2 bg-black/30 rounded p-2 max-h-32 overflow-y-auto text-xs font-mono">
+                <div v-for="(log, index) in progressLog" :key="index" :class="{
+                  'text-red-400': log.type === 'stderr' || log.type === 'error',
+                  'text-green-400': log.type === 'stdout' || log.type === 'success',
+                  'text-blue-400': log.type === 'info',
+                  'text-yellow-400': log.type === 'retry'
+                }">
                   {{ log.data }}
                 </div>
               </div>
             </div>
 
             <!-- Search Results -->
-            <div v-if="searchResults.length > 0" class="space-y-3">
+            <div v-if="searchResults.length > 0" class="space-y-4 mb-4">
               <div class="flex justify-between items-center">
                 <h3 class="text-lg font-medium flex items-center">
                   Search Results
@@ -165,6 +170,7 @@
                           <span class="bg-blue-900/20 text-blue-400 px-2 py-0.5 rounded text-xs">{{ platform.maintainer }}</span>
                           <span class="bg-orange-900/20 text-orange-400 px-2 py-0.5 rounded text-xs">{{ platform.boardCount }} {{ platform.boardCount === 1 ? 'board' : 'boards' }}</span>
                           <span v-if="platform.types && platform.types.length" class="bg-purple-900/20 text-purple-400 px-2 py-0.5 rounded text-xs">{{ platform.types.join(', ') }}</span>
+                          <span v-if="platform.requiresUrl" class="bg-yellow-900/20 text-yellow-400 px-2 py-0.5 rounded text-xs">⚠️ Requires URL</span>
                         </div>
                         <div v-if="platform.sampleBoards && platform.sampleBoards.length" class="text-xs text-white/50 mt-1 text-left">
                           Boards: {{ platform.sampleBoards.join(', ') }}{{ platform.boardCount > platform.sampleBoards.length ? '...' : '' }}
@@ -192,7 +198,7 @@
             </div>
 
             <!-- Installed Board Packages -->
-            <div v-if="installedCores.length > 0" class="space-y-3">
+            <div v-if="installedCores.length > 0" class="space-y-4 mb-4">
               <h3 class="text-lg font-medium flex items-center">
                 Installed Board Packages
                 <span class="ml-2 px-2 py-0.5 bg-[#333] rounded-full text-xs text-white/60">{{ installedCores.length }}</span>
@@ -433,7 +439,7 @@ const props = defineProps({
   }
 });
 
-const emit = defineEmits(['close']);
+const emit = defineEmits(['close', 'core-installed', 'core-uninstalled', 'core-upgraded']);
 
 // State variables
 const isLoading = ref(true);
@@ -575,33 +581,42 @@ async function searchCores() {
   searchResults.value = [];
   showStatus('Searching board packages...', 'info');
   
-      try {
-      const result = await window.electronAPI.searchCores(searchQuery.value.trim());
-      if (result.success) {
-        searchResults.value = result.results.map(platform => {
-          // Get the latest version details
-          const latestVersionKey = platform.latest_version || platform.latest;
-          const latestVersion = platform.releases && latestVersionKey && platform.releases[latestVersionKey] 
-            ? platform.releases[latestVersionKey] 
-            : null;
-          
-          const boards = latestVersion?.boards || [];
-          const boardCount = boards.length;
-          const sampleBoards = boards.slice(0, 3).map(board => board.name);
-          
-          return {
-            id: platform.id,
-            name: latestVersion?.name || platform.name || platform.id.split(':')[1] || platform.id,
-            latest: latestVersionKey || 'Unknown',
-            maintainer: platform.maintainer || 'Unknown',
-            boardCount,
-            sampleBoards,
-            types: latestVersion?.types || []
-          };
-        });
-      
+  try {
+    const result = await window.electronAPI.searchCores(searchQuery.value.trim());
+    if (result.success) {
+      searchResults.value = result.results.map(platform => {
+        // Get the latest version details
+        const latestVersionKey = platform.latest_version || platform.latest;
+        const latestVersion = platform.releases && latestVersionKey && platform.releases[latestVersionKey] 
+          ? platform.releases[latestVersionKey] 
+          : null;
+        
+        const boards = latestVersion?.boards || [];
+        const boardCount = boards.length;
+        const sampleBoards = boards.slice(0, 3).map(board => board.name);
+        
+        return {
+          id: platform.id,
+          name: latestVersion?.name || platform.name || platform.id.split(':')[1] || platform.id,
+          latest: latestVersionKey || 'Unknown',
+          maintainer: platform.maintainer || 'Unknown',
+          boardCount,
+          sampleBoards,
+          types: latestVersion?.types || [],
+          requiresUrl: needsAdditionalUrl(platform.id)
+        };
+      });
+    
       if (searchResults.value.length === 0) {
-        showStatus('No board packages found matching your search', 'info');
+        const suggestedUrl = getSuggestedUrlForPlatform(searchQuery.value.trim());
+        if (suggestedUrl) {
+          showStatus(
+            `No packages found for "${searchQuery.value}". This might require adding the ${suggestedUrl.name} board manager URL in the Custom URLs tab.`, 
+            'info'
+          );
+        } else {
+          showStatus('No board packages found matching your search', 'info');
+        }
       } else {
         clearStatus();
       }
@@ -614,6 +629,12 @@ async function searchCores() {
   } finally {
     isLoading.value = false;
   }
+}
+
+// Check if a platform needs additional URL
+function needsAdditionalUrl(platformId) {
+  const thirdPartyPlatforms = ['esp32:esp32', 'esp8266:esp8266', 'adafruit:samd', 'SparkFun:avr'];
+  return thirdPartyPlatforms.includes(platformId);
 }
 
 // Install a board package
@@ -630,11 +651,54 @@ async function installCore(platformId) {
   try {
     const result = await window.electronAPI.installCore(platformId);
     if (result.success) {
-      showStatus(`Successfully installed ${platformId}`, 'success');
+      showStatus(result.message || `Successfully installed ${platformId}`, 'success');
       // Reload installed board packages to include the newly installed one
       await loadInstalledCores();
+      // Emit event to notify parent components that a new core was installed
+      emit('core-installed', platformId);
     } else {
-      showError(`Failed to install board package: ${result.error}`);
+      // Handle missing package URL case
+      let errorMessage = result.error;
+      if (typeof errorMessage === 'object') {
+        errorMessage = errorMessage.error || JSON.stringify(errorMessage);
+      }
+      
+      // Check if the error is due to missing package URL
+      if (errorMessage.includes('package not found') || 
+          errorMessage.includes('no matching platform') ||
+          errorMessage.includes('platform not found')) {
+        
+        // Suggest adding the appropriate URL
+        const suggestedUrl = getSuggestedUrlForPlatform(platformId);
+        if (suggestedUrl) {
+          const addUrl = confirm(
+            `Package ${platformId} not found. This likely requires adding a board manager URL.\n\n` +
+            `Suggested URL: ${suggestedUrl.url}\n\n` +
+            `Would you like to add this URL and retry the installation?`
+          );
+          
+          if (addUrl) {
+            try {
+              showStatus('Adding board manager URL...', 'info');
+              const addResult = await window.electronAPI.addBoardManagerUrl(suggestedUrl.url);
+              if (addResult.success) {
+                showStatus('Updating package index...', 'info');
+                await updateIndex();
+                showStatus('Retrying installation...', 'info');
+                // Retry installation after adding URL
+                setTimeout(() => installCore(platformId), 1000);
+                return;
+              } else {
+                showError(`Failed to add URL: ${addResult.error}`);
+              }
+            } catch (urlError) {
+              showError(`Failed to add URL: ${urlError.message}`);
+            }
+          }
+        }
+      }
+      
+      showError(`Failed to install board package: ${errorMessage}`);
     }
   } catch (error) {
     console.error('Error installing board package:', error);
@@ -646,6 +710,34 @@ async function installCore(platformId) {
       showProgress.value = false;
     }, 3000);
   }
+}
+
+// Get suggested URL for a platform
+function getSuggestedUrlForPlatform(platformId) {
+  const urlMappings = {
+    'esp32:esp32': { 
+      name: 'ESP32', 
+      url: 'https://dl.espressif.com/dl/package_esp32_index.json' 
+    },
+    'esp8266:esp8266': { 
+      name: 'ESP8266', 
+      url: 'https://arduino.esp8266.com/stable/package_esp8266com_index.json' 
+    },
+    'arduino:samd': { 
+      name: 'Arduino SAMD', 
+      url: 'https://downloads.arduino.cc/packages/package_index.json' 
+    },
+    'adafruit:samd': { 
+      name: 'Adafruit SAMD', 
+      url: 'https://adafruit.github.io/arduino-board-index/package_adafruit_index.json' 
+    },
+    'SparkFun:avr': { 
+      name: 'SparkFun AVR', 
+      url: 'https://raw.githubusercontent.com/sparkfun/Arduino_Boards/master/package_sparkfun_index.json' 
+    }
+  };
+  
+  return urlMappings[platformId] || null;
 }
 
 // Uninstall a board package
@@ -665,6 +757,8 @@ async function uninstallCore(platformId) {
       showStatus(`Successfully uninstalled ${platformId}`, 'success');
       // Remove from installed board packages list
       installedCores.value = installedCores.value.filter(core => core.id !== platformId);
+      // Emit event to notify parent components that a core was uninstalled
+      emit('core-uninstalled', platformId);
     } else {
       showError(`Failed to uninstall board package: ${result.error}`);
     }
@@ -688,6 +782,8 @@ async function upgradeCore(platformId) {
       showStatus(`Successfully upgraded ${platformId}`, 'success');
       // Reload installed board packages to reflect the upgrade
       await loadInstalledCores();
+      // Emit event to notify parent components that a core was upgraded
+      emit('core-upgraded', platformId);
     } else {
       showError(`Failed to upgrade board package: ${result.error}`);
     }
@@ -734,33 +830,87 @@ function clearStatus() {
 
 // Handle installation progress updates
 function handleInstallProgress(data) {
-  // Add to log with timestamp
-  const timestamp = new Date().toLocaleTimeString();
-  progressLog.value.push({
-    type: data.type,
-    data: `[${timestamp}] ${data.data.trim()}`
-  });
+  const timestamp = data.timestamp ? new Date(data.timestamp).toLocaleTimeString() : new Date().toLocaleTimeString();
   
-  // Extract download percentage from log messages
-  const logData = data.data.trim();
-  
-  // Look for download percentage patterns in the log
-  const downloadPattern = /(\d+)%/;
-  const downloadMatch = logData.match(downloadPattern);
-  
-  if (downloadMatch && downloadMatch[1]) {
-    const percentage = parseInt(downloadMatch[1], 10);
-    if (!isNaN(percentage) && percentage >= 0 && percentage <= 100) {
-      downloadProgress.value = percentage;
-    }
-  }
-  
-  // Check for completion patterns
-  if (logData.includes('downloaded') || logData.includes('installed')) {
-    // When download completes, ensure the progress bar shows 100%
-    if (downloadProgress.value > 0 && downloadProgress.value < 100) {
+  // Handle different types of progress updates
+  switch (data.type) {
+    case 'stdout':
+    case 'stderr':
+      // Add to log for detailed output
+      progressLog.value.push({
+        type: data.type,
+        data: `[${timestamp}] ${data.data.trim()}`
+      });
+      
+      // Extract download percentage from log messages
+      const logData = data.data.trim();
+      const downloadPattern = /(\d+)%/;
+      const downloadMatch = logData.match(downloadPattern);
+      
+      if (downloadMatch && downloadMatch[1]) {
+        const percentage = parseInt(downloadMatch[1], 10);
+        if (!isNaN(percentage) && percentage >= 0 && percentage <= 100) {
+          downloadProgress.value = percentage;
+        }
+      }
+      
+      // Update status based on content
+      if (logData.includes('Downloading')) {
+        progressStatus.value = `Downloading packages...`;
+      } else if (logData.includes('Installing')) {
+        progressStatus.value = `Installing packages...`;
+      } else if (logData.includes('Configuring')) {
+        progressStatus.value = `Configuring packages...`;
+      }
+      break;
+      
+    case 'status':
+      progressLog.value.push({
+        type: 'info',
+        data: `[${timestamp}] ${data.data}`
+      });
+      
+      if (data.status === 'completed') {
+        downloadProgress.value = 100;
+        progressStatus.value = 'Installation completed';
+      } else if (data.status === 'failed') {
+        progressStatus.value = 'Installation failed';
+      }
+      break;
+      
+    case 'success':
+      progressLog.value.push({
+        type: 'success',
+        data: `[${timestamp}] ✓ ${data.data}`
+      });
+      progressStatus.value = data.data;
       downloadProgress.value = 100;
-    }
+      showStatus(data.data, 'success');
+      break;
+      
+    case 'error':
+      progressLog.value.push({
+        type: 'error',
+        data: `[${timestamp}] ✗ ${data.data}`
+      });
+      progressStatus.value = `Error: ${data.data}`;
+      showError(data.data);
+      break;
+      
+    case 'retry':
+      progressLog.value.push({
+        type: 'info',
+        data: `[${timestamp}] 🔄 ${data.data}`
+      });
+      progressStatus.value = data.data;
+      downloadProgress.value = 0; // Reset progress for retry
+      break;
+      
+    default:
+      progressLog.value.push({
+        type: data.type || 'info',
+        data: `[${timestamp}] ${data.data}`
+      });
   }
   
   // Auto-scroll the log container
@@ -826,6 +976,8 @@ async function updateAllCores() {
       // Reload installed cores and clear available updates
       await loadInstalledCores();
       availableUpdates.value.cores = [];
+      // Emit event to notify parent components that cores were upgraded
+      emit('core-upgraded', 'all');
     } else {
       showError(`Failed to update all board packages: ${result.error}`);
     }
