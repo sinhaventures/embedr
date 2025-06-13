@@ -184,6 +184,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   openExternalUrl: (url) => ipcRenderer.invoke('open-external-url', url),
   // =======================================================
 
+  // === App Update Checking API (NEW) ===
+  checkAppUpdate: () => ipcRenderer.invoke('check-app-update'),
+  // ====================================
 
 });
 

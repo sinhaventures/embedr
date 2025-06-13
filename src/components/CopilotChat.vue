@@ -680,7 +680,7 @@ const loadChatMessages = async (threadIdToLoad) => {
       // Check if this chat needs a name after loading messages
       setTimeout(() => {
         checkAndGenerateChatName();
-      }, 100); // Small delay to ensure all state is updated
+      }, 200); // Small delay to ensure all state is updated
 
       for (const startMsg of toolStarts) {
         const originalToolId = startMsg.toolId || startMsg.tool_call_id;
@@ -777,6 +777,11 @@ const handleSelectChat = async () => {
       return (lastUsedMap[b.id] || 0) - (lastUsedMap[a.id] || 0);
     });
     await loadChatMessages(currentThreadId.value);
+    
+    // Check if the selected chat needs a name
+    setTimeout(() => {
+      checkAndGenerateChatName();
+    }, 300);
     
     // Focus the input after selecting chat
     await focusInput();
@@ -1149,37 +1154,12 @@ onMounted(async () => {
       }
       isLoading.value = false;
       
-      // NEW: Generate chat name if this is the first conversation in a chat
+      // Generate chat name if this is the first conversation in a chat
       if (currentThreadId.value) {
-        const currentThread = availableThreads.value.find(t => t.id === currentThreadId.value);
-        console.log('[CopilotChat] Checking if chat name should be generated:', {
-          threadId: currentThreadId.value,
-          hasName: !!currentThread?.name,
-          messageCount: messages.value.length,
-          userMessages: messages.value.filter(m => m.role === 'user').length,
-          assistantMessages: messages.value.filter(m => m.role === 'assistant').length
-        });
-        
-        // Generate name if thread doesn't have one and we have both user and assistant messages
-        if (!currentThread?.name) {
-          const userMessages = messages.value.filter(m => m.role === 'user');
-          const assistantMessages = messages.value.filter(m => m.role === 'assistant');
-          
-          // Trigger generation when we have exactly one user message and one assistant message (first conversation)
-          if (userMessages.length === 1 && assistantMessages.length === 1) {
-            const firstUserMessage = userMessages[0];
-            const firstAssistantMessage = assistantMessages[0];
-            
-            console.log('[CopilotChat] Triggering chat name generation with full conversation context');
-            
-            // Generate chat name with both user and assistant messages
-            generateChatName(firstUserMessage.content, firstAssistantMessage.content).catch(console.error);
-          } else {
-            console.log('[CopilotChat] Not the right time for name generation - userMessages:', userMessages.length, 'assistantMessages:', assistantMessages.length);
-          }
-        } else {
-          console.log('[CopilotChat] Thread already has a name:', currentThread.name);
-        }
+        // Use a small delay to ensure all message state is updated
+        setTimeout(() => {
+          checkAndGenerateChatName();
+        }, 100);
       }
     } else if (data.type === 'error') {
       // Mark any loading tools as errored
@@ -1487,39 +1467,50 @@ const checkAndGenerateChatName = () => {
   if (!currentThreadId.value || !props.projectPath) return;
   
   const currentThread = availableThreads.value.find(t => t.id === currentThreadId.value);
+  const userMessages = messages.value.filter(m => m.role === 'user');
+  const assistantMessages = messages.value.filter(m => m.role === 'assistant');
+  
   console.log('[CopilotChat] Checking chat name generation need:', {
     threadId: currentThreadId.value,
     hasName: !!currentThread?.name,
     messageCount: messages.value.length,
-    userMessages: messages.value.filter(m => m.role === 'user').length,
-    assistantMessages: messages.value.filter(m => m.role === 'assistant').length
+    userMessages: userMessages.length,
+    assistantMessages: assistantMessages.length,
+    isGeneratingName: isGeneratingName.value
   });
   
-  // Only generate if no name exists and we have conversation
-  if (!currentThread?.name) {
-    const userMessages = messages.value.filter(m => m.role === 'user');
-    const assistantMessages = messages.value.filter(m => m.role === 'assistant');
+  // Only generate if no name exists, we have at least one complete conversation, and we're not already generating
+  if (!currentThread?.name && !isGeneratingName.value && userMessages.length >= 1 && assistantMessages.length >= 1) {
+    const firstUserMessage = userMessages[0];
+    const firstAssistantMessage = assistantMessages[0];
     
-    if (userMessages.length === 1 && assistantMessages.length === 1) {
-      const firstUserMessage = userMessages[0];
-      const firstAssistantMessage = assistantMessages[0];
-      
-      console.log('[CopilotChat] Triggering deferred chat name generation with full context');
-      generateChatName(firstUserMessage.content, firstAssistantMessage.content).catch(console.error);
-    }
+    console.log('[CopilotChat] Triggering chat name generation with first conversation');
+    generateChatName(firstUserMessage.content, firstAssistantMessage.content).catch(console.error);
   }
 };
 
-// NEW: Generate chat name for first conversation (user query + LLM response)
+// Generate chat name for first conversation (user query + LLM response)
 const generateChatName = async (userMessage, assistantResponse) => {
   if (!props.projectPath || !currentThreadId.value) {
     console.log('[CopilotChat] Cannot generate chat name - missing projectPath or currentThreadId');
     return;
   }
   
+  // Check if we're already generating or if thread already has a name
+  if (isGeneratingName.value) {
+    console.log('[CopilotChat] Already generating name, skipping...');
+    return;
+  }
+  
+  const currentThread = availableThreads.value.find(t => t.id === currentThreadId.value);
+  if (currentThread?.name) {
+    console.log('[CopilotChat] Thread already has name:', currentThread.name);
+    return;
+  }
+  
   try {
     isGeneratingName.value = true;
-    console.log('[CopilotChat] Generating chat name with conversation context...');
+    console.log('[CopilotChat] Starting chat name generation...');
     
     // Extract text content from user message (handle both string and multimodal content)
     let userText = '';
@@ -1530,58 +1521,79 @@ const generateChatName = async (userMessage, assistantResponse) => {
       userText = userMessage;
     }
     
-    // Clean the assistant response (remove any context markers)
-    let cleanAssistantResponse = assistantResponse || '';
-    const queryMarker = 'USER QUERY:\n';
-    const markerIndex = cleanAssistantResponse.indexOf(queryMarker);
-    if (markerIndex !== -1) {
-      cleanAssistantResponse = cleanAssistantResponse.substring(markerIndex + queryMarker.length);
+    // Fallback if no user text found
+    if (!userText) {
+      console.log('[CopilotChat] No user text found for name generation');
+      return;
     }
     
+    // Clean and limit the text for API
+    const cleanUserText = userText.trim().substring(0, 500);
+    console.log('[CopilotChat] Generating name for text:', cleanUserText.substring(0, 100) + '...');
+    
     const result = await window.electronAPI.invokeFirebaseFunction('generateChatName', {
-      message: userText.substring(0, 500) // Limit length for API efficiency - Firebase function expects 'message' field
+      message: cleanUserText
     });
     
     if (result.success && result.data && result.data.chatName) {
-      const chatName = result.data.chatName;
+      const chatName = result.data.chatName.trim();
       console.log('[CopilotChat] Generated chat name:', chatName);
       
-      // Store the name in localStorage
-      setThreadName(props.projectPath, currentThreadId.value, chatName);
-      
-      // Update the current thread in availableThreads with better reactivity
-      const threadIndex = availableThreads.value.findIndex(t => t.id === currentThreadId.value);
-      if (threadIndex !== -1) {
-        console.log('[CopilotChat] Updating thread name at index', threadIndex, 'to:', chatName);
-        
-        // Create a completely new array to ensure Vue detects the change
-        const newThreads = [...availableThreads.value];
-        newThreads[threadIndex] = {
-          ...newThreads[threadIndex],
-          name: chatName
-        };
-        availableThreads.value = newThreads;
-        
-        // Also trigger a manual reactive update
-        await nextTick();
-        console.log('[CopilotChat] Thread name updated successfully');
+      // Validate the generated name
+      if (!chatName || chatName.length < 2) {
+        console.warn('[CopilotChat] Generated name too short, using fallback');
+        const fallbackName = `Chat ${new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
+        await applyChatName(fallbackName);
       } else {
-        console.warn('[CopilotChat] Could not find thread index for ID:', currentThreadId.value);
+        await applyChatName(chatName);
       }
-      
-      toast({
-        title: 'Chat Named',
-        description: `Chat named: "${chatName}"`,
-        duration: 2000,
-      });
     } else {
       console.warn('[CopilotChat] Failed to generate chat name:', result.error || 'Unknown error');
+      // Use fallback name
+      const fallbackName = `Chat ${new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
+      await applyChatName(fallbackName);
     }
   } catch (error) {
     console.error('[CopilotChat] Error generating chat name:', error);
-    // Don't show error to user as this is not critical functionality
+    // Use fallback name on error
+    const fallbackName = `Chat ${new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
+    await applyChatName(fallbackName);
   } finally {
     isGeneratingName.value = false;
+  }
+};
+
+// Helper function to apply the chat name with proper reactivity
+const applyChatName = async (chatName) => {
+  if (!chatName || !currentThreadId.value || !props.projectPath) return;
+  
+  console.log('[CopilotChat] Applying chat name:', chatName);
+  
+  // Store the name in localStorage
+  setThreadName(props.projectPath, currentThreadId.value, chatName);
+  
+  // Update the current thread in availableThreads with better reactivity
+  const threadIndex = availableThreads.value.findIndex(t => t.id === currentThreadId.value);
+  if (threadIndex !== -1) {
+    console.log('[CopilotChat] Updating thread name at index', threadIndex, 'to:', chatName);
+    
+    // Use Vue's reactivity helper to ensure the change is detected
+    availableThreads.value[threadIndex] = {
+      ...availableThreads.value[threadIndex],
+      name: chatName
+    };
+    
+    // Force reactivity update
+    await nextTick();
+    console.log('[CopilotChat] Thread name updated successfully');
+    
+    toast({
+      title: 'Chat Named',
+      description: `"${chatName}"`,
+      duration: 2000,
+    });
+  } else {
+    console.warn('[CopilotChat] Could not find thread index for ID:', currentThreadId.value);
   }
 };
 

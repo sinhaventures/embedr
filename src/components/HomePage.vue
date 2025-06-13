@@ -254,13 +254,16 @@
 
       <!-- Create Project Modal -->
       <div v-if="showCreateModal"
-        class="fixed inset-0 flex items-center justify-center bg-black/50 backdrop-blur-sm z-50">
+        class="fixed inset-0 flex items-center justify-center bg-black/50 backdrop-blur-sm z-50"
+        tabindex="-1"
+        @keydown.esc="closeCreateModal">
         <div class="bg-[#2D2D2D] rounded-xl shadow-xl p-6 w-[400px]">
           <h3 class="text-lg font-semibold mb-4">Create New Project</h3>
           <div class="relative">
             <input v-model="newProjectName" placeholder="Project name"
               class="w-full px-3 py-2 bg-[#1E1E1E] border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-white/20 text-sm"
-              @keydown.enter="createBlankProject" ref="newProjectNameInput" 
+              @keydown="handleCreateModalKeydown"
+              ref="newProjectNameInput" 
               :disabled="isGeneratingProjectName" />
             <div v-if="isGeneratingProjectName" class="absolute right-3 top-1/2 transform -translate-y-1/2">
               <svg class="animate-spin h-4 w-4 text-white/60" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -275,7 +278,7 @@
               :disabled="isGeneratingProjectName">
               {{ isGeneratingProjectName ? 'Generating Name...' : 'Create Project' }}
             </Button>
-            <Button @click="showCreateModal = false" variant="outline"
+            <Button @click="closeCreateModal" variant="outline"
               class="flex-1 border-white/10 text-white/90 hover:bg-white/5"
               :disabled="isGeneratingProjectName">
               Cancel
@@ -329,6 +332,92 @@
         @core-uninstalled="handleCoreUninstalled"
         @core-upgraded="handleCoreUpgraded"
       />
+
+      <!-- Update Available Dialog -->
+      <div v-if="updateDialog.show || updateDialog.minimized" 
+        class="fixed bottom-4 left-4 z-50"
+        :class="{ 'w-80': updateDialog.show, 'w-auto': updateDialog.minimized }">
+        
+        <!-- Minimized state - just the update button -->
+        <div v-if="updateDialog.minimized && !updateDialog.show" 
+          class="bg-gradient-to-r from-rose-600 to-red-600 rounded-lg p-2 shadow-lg border border-rose-500/50 hover:from-rose-500 hover:to-red-500 transition-all duration-200 cursor-pointer"
+          @click="updateDialog.show = true">
+          <div class="flex items-center gap-2 text-white text-sm font-medium">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 2v10l3-3m-6 0l3 3"/>
+              <path d="M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9"/>
+            </svg>
+            <span>Update Available</span>
+          </div>
+        </div>
+
+        <!-- Expanded dialog -->
+        <div v-if="updateDialog.show" 
+          class="bg-[#1A1A1A] rounded-lg border border-rose-500/50 shadow-xl max-w-sm">
+          
+          <!-- Header -->
+          <div class="flex items-center justify-between p-3 border-b border-white/10">
+            <div class="flex items-center gap-2">
+              <div class="w-8 h-8 bg-gradient-to-br from-rose-500 to-red-600 rounded-lg flex items-center justify-center">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M12 2v10l3-3m-6 0l3 3"/>
+                  <path d="M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9"/>
+                </svg>
+              </div>
+              <div class="text-left">
+                <h3 class="text-sm font-semibold text-white">Update Available</h3>
+                <p class="text-xs text-gray-400">v{{ updateDialog.latestVersion }} is ready</p>
+              </div>
+            </div>
+            <div class="flex items-center gap-1">
+              <button @click="minimizeUpdateDialog" 
+                class="p-1 text-gray-400 hover:text-white rounded transition-colors" 
+                title="Minimize">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M6 19v-3h12v3"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- Content -->
+          <div class="p-3 space-y-3 text-left">
+            <div class="text-xs text-gray-300">
+              <p>A new version of Embedr is available with improvements and new features.</p>
+            </div>
+
+            <!-- Version info -->
+            <div class="flex justify-between text-xs">
+              <span class="text-gray-400">Current:</span>
+              <span class="text-white">v{{ updateDialog.currentVersion }}</span>
+            </div>
+            <div class="flex justify-between text-xs">
+              <span class="text-gray-400">Latest:</span>
+              <span class="text-rose-400 font-medium">v{{ updateDialog.latestVersion }}</span>
+            </div>
+
+            <!-- Release notes preview -->
+            <div v-if="updateDialog.releaseNotes" class="space-y-2">
+              <h4 class="text-xs font-medium text-gray-300">What's New:</h4>
+              <div class="text-xs text-gray-400 bg-[#111111] rounded p-2 max-h-20 overflow-y-auto text-left">
+                <p>{{ truncatedReleaseNotes }}</p>
+              </div>
+            </div>
+
+            <!-- Action buttons -->
+            <div class="flex gap-2 pt-2">
+              <button @click="downloadUpdate" 
+                class="flex-1 bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 text-white text-xs font-medium py-2 px-3 rounded transition-all duration-200">
+                Download Update
+              </button>
+              <button @click="viewReleaseNotes" 
+                class="px-3 py-2 text-xs text-gray-400 hover:text-white border border-white/10 hover:border-white/20 rounded transition-colors">
+                View Details
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -404,6 +493,7 @@ const attachedImage = ref({ name: null, type: null, dataUrl: null }); // Ref for
 const isDraggingOver = ref(false); // State for drag-over visual feedback
 const showCoreManagerModal = ref(false);
 const isGeneratingProjectName = ref(false);
+const hasGeneratedNameForCurrentSession = ref(false);
 
 const isProUser = computed(() => {
   const planId = subscription.value?.planId;
@@ -411,6 +501,35 @@ const isProUser = computed(() => {
   const isProPlan = planId === 'pro_monthly' || planId === 'pro_yearly' || planId === 'pro'; // Include legacy 'pro' for compatibility
   const isValidStatus = status === 'active' || status === 'authenticated'; // Based on your subscription guide
   return isProPlan && isValidStatus;
+});
+
+// Update Dialog State
+const updateDialog = ref({
+  show: false,
+  minimized: false,
+  currentVersion: '',
+  latestVersion: '',
+  releaseNotes: '',
+  releaseUrl: '',
+  downloadUrl: ''
+});
+
+// Global flag to track if update check has been performed in this session
+const hasCheckedForUpdates = ref(false);
+
+// Computed property for truncated release notes
+const truncatedReleaseNotes = computed(() => {
+  const notes = updateDialog.value.releaseNotes;
+  if (!notes) return '';
+  
+  // Remove markdown formatting and truncate
+  const plainText = notes
+    .replace(/[#*`]/g, '') // Remove basic markdown
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // Convert links to plain text
+    .trim();
+  
+  if (plainText.length <= 150) return plainText;
+  return plainText.substring(0, 147) + '...';
 });
 
 // Helper function to extract Board Name from the combined label (copied from EditorPage)
@@ -488,6 +607,201 @@ function handleCoreUpgraded(platformId) {
   fetchBoards();
   // Dispatch global event to notify other components
   window.dispatchEvent(new CustomEvent('core-upgraded', { detail: platformId }));
+}
+
+// === Update Checking Functions ===
+
+async function checkForUpdates() {
+  console.log('[HomePage] Checking for app updates...');
+  
+  // Check if we've already performed an update check in this session
+  if (hasCheckedForUpdates.value) {
+    console.log('[HomePage] Update check already performed in this session, skipping...');
+    return;
+  }
+
+  // Check if we've checked recently (within last 6 hours)
+  const lastCheckTime = localStorage.getItem('embedr-last-update-check');
+  const now = Date.now();
+  const sixHours = 6 * 60 * 60 * 1000; // 6 hours in milliseconds
+  
+  if (lastCheckTime && (now - parseInt(lastCheckTime)) < sixHours) {
+    console.log('[HomePage] Update check performed recently, skipping...');
+    hasCheckedForUpdates.value = true;
+    
+    // Still show existing update dialog if there was a stored update
+    const storedUpdateData = localStorage.getItem('embedr-minimized-update-data');
+    if (storedUpdateData) {
+      try {
+        const updateData = JSON.parse(storedUpdateData);
+        // Show minimized state for existing update with complete data
+        updateDialog.value = {
+          show: false,
+          minimized: true,
+          currentVersion: updateData.currentVersion,
+          latestVersion: updateData.latestVersion,
+          releaseNotes: updateData.releaseNotes,
+          releaseUrl: updateData.releaseUrl,
+          downloadUrl: updateData.downloadUrl
+        };
+      } catch (error) {
+        console.error('[HomePage] Error parsing stored update data:', error);
+        localStorage.removeItem('embedr-minimized-update-data');
+      }
+    }
+    return;
+  }
+
+  // Mark that we're performing the check
+  hasCheckedForUpdates.value = true;
+  localStorage.setItem('embedr-last-update-check', now.toString());
+  
+  try {
+    if (window.electronAPI?.checkAppUpdate) {
+      const result = await window.electronAPI.checkAppUpdate();
+      console.log('[HomePage] Update check result:', result);
+      
+      if (result.success && result.updateAvailable) {
+        // Check if this version was previously minimized
+        const storedUpdateData = localStorage.getItem('embedr-minimized-update-data');
+        let shouldShowMinimized = false;
+        
+        if (storedUpdateData) {
+          try {
+            const updateData = JSON.parse(storedUpdateData);
+            shouldShowMinimized = updateData.latestVersion === result.latestVersion;
+          } catch (error) {
+            console.error('[HomePage] Error parsing stored update data:', error);
+            localStorage.removeItem('embedr-minimized-update-data');
+          }
+        }
+        
+        updateDialog.value = {
+          ...updateDialog.value,
+          show: !shouldShowMinimized, // Show full dialog only if not previously minimized
+          minimized: shouldShowMinimized, // Minimize if it was minimized before
+          currentVersion: result.currentVersion,
+          latestVersion: result.latestVersion,
+          releaseNotes: result.releaseNotes,
+          releaseUrl: result.releaseUrl,
+          downloadUrl: result.downloadUrl
+        };
+        
+        if (shouldShowMinimized) {
+          console.log('[HomePage] Update dialog minimized for previously seen version:', result.latestVersion);
+        } else {
+          console.log('[HomePage] Update dialog shown for new version:', result.latestVersion);
+        }
+      } else if (result.success) {
+        console.log('[HomePage] No update available');
+        // Clear any stored minimized version if we're up to date
+        localStorage.removeItem('embedr-minimized-update-data');
+      } else {
+        console.warn('[HomePage] Update check failed:', result.error);
+      }
+    } else {
+      console.warn('[HomePage] checkAppUpdate API not available');
+    }
+  } catch (error) {
+    console.error('[HomePage] Error checking for updates:', error);
+  }
+}
+
+// Function to force check for updates (can be called manually if needed)
+async function forceCheckForUpdates() {
+  console.log('[HomePage] Forcing update check...');
+  hasCheckedForUpdates.value = false;
+  localStorage.removeItem('embedr-last-update-check');
+  await checkForUpdates();
+}
+
+function minimizeUpdateDialog() {
+  // Store the complete update data in localStorage
+  const updateData = {
+    latestVersion: updateDialog.value.latestVersion,
+    currentVersion: updateDialog.value.currentVersion,
+    releaseNotes: updateDialog.value.releaseNotes,
+    releaseUrl: updateDialog.value.releaseUrl,
+    downloadUrl: updateDialog.value.downloadUrl
+  };
+  
+  localStorage.setItem('embedr-minimized-update-data', JSON.stringify(updateData));
+  
+  updateDialog.value.show = false;
+  updateDialog.value.minimized = true;
+  
+  console.log('[HomePage] Update dialog minimized and complete data saved for version:', updateDialog.value.latestVersion);
+}
+
+async function downloadUpdate() {
+  console.log('[HomePage] Opening download URL:', updateDialog.value.downloadUrl);
+  
+  try {
+    if (window.electronAPI?.openExternalUrl) {
+      await window.electronAPI.openExternalUrl(updateDialog.value.downloadUrl);
+    } else {
+      // Fallback to window.open
+      window.open(updateDialog.value.downloadUrl, '_blank');
+    }
+  } catch (error) {
+    console.error('[HomePage] Error opening download URL:', error);
+  }
+}
+
+async function viewReleaseNotes() {
+  console.log('[HomePage] Opening release notes URL:', updateDialog.value.releaseUrl);
+  
+  try {
+    if (window.electronAPI?.openExternalUrl) {
+      await window.electronAPI.openExternalUrl(updateDialog.value.releaseUrl);
+    } else {
+      // Fallback to window.open
+      window.open(updateDialog.value.releaseUrl, '_blank');
+    }
+  } catch (error) {
+    console.error('[HomePage] Error opening release notes URL:', error);
+  }
+}
+
+// === End Update Checking Functions ===
+
+// Global app initialization - should only run once when app starts
+function initializeApp() {
+  console.log('[HomePage] Initializing app...');
+  
+  // Check if app has already been initialized in this session
+  if (window.embedrAppInitialized) {
+    console.log('[HomePage] App already initialized, skipping...');
+    
+    // Still restore minimized update dialog if it exists
+    const storedUpdateData = localStorage.getItem('embedr-minimized-update-data');
+    if (storedUpdateData) {
+      try {
+        const updateData = JSON.parse(storedUpdateData);
+        updateDialog.value = {
+          show: false,
+          minimized: true,
+          currentVersion: updateData.currentVersion,
+          latestVersion: updateData.latestVersion,
+          releaseNotes: updateData.releaseNotes,
+          releaseUrl: updateData.releaseUrl,
+          downloadUrl: updateData.downloadUrl
+        };
+      } catch (error) {
+        console.error('[HomePage] Error parsing stored update data:', error);
+        localStorage.removeItem('embedr-minimized-update-data');
+      }
+    }
+    return;
+  }
+  
+  // Mark app as initialized
+  window.embedrAppInitialized = true;
+  
+  // Check for updates after a short delay to avoid blocking initial UI
+  setTimeout(() => {
+    checkForUpdates();
+  }, 2000);
 }
 
 // Function to auto-resize textarea based on content
@@ -584,19 +898,28 @@ function handleCreateAI() {
   };
   console.log('[HomePage] Stored pendingAIPrompt:', JSON.stringify(pendingAIPrompt.value));
 
-  // Show the modal immediately and generate name in background
+  // Reset session flag and show the modal immediately
+  hasGeneratedNameForCurrentSession.value = false;
   newProjectName.value = ''; // Start with empty name
   showCreateModal.value = true;
   
-  // Generate project name in background
+  // Generate project name in background only once per session
   generateProjectName(textPrompt, imageData);
 }
 
-// NEW: Generate project name using AI
+// Generate project name using AI
 async function generateProjectName(prompt, imageDataUrl) {
   if (!prompt && !imageDataUrl) return;
   
+  // Only generate once per modal session
+  if (hasGeneratedNameForCurrentSession.value || isGeneratingProjectName.value) {
+    console.log('[HomePage] Name already generated for this session or currently generating, skipping...');
+    return;
+  }
+  
   try {
+    // Set flags immediately to prevent duplicate calls
+    hasGeneratedNameForCurrentSession.value = true;
     isGeneratingProjectName.value = true;
     console.log('[HomePage] Generating project name...');
     
@@ -627,16 +950,33 @@ async function generateProjectName(prompt, imageDataUrl) {
         generatedName = 'arduino_project';
       }
       
-      newProjectName.value = generatedName;
+      // Only set the name if we haven't closed the modal in the meantime
+      if (showCreateModal.value) {
+        newProjectName.value = generatedName;
+        
+        // Auto-focus and select the generated name after a short delay
+        nextTick(() => {
+          setTimeout(() => {
+            if (newProjectNameInput.value && showCreateModal.value) {
+              newProjectNameInput.value.focus();
+              newProjectNameInput.value.select();
+            }
+          }, 100);
+        });
+      }
     } else {
       console.warn('[HomePage] Failed to generate project name:', result.error || 'Unknown error');
       // Leave blank on error as requested
-      newProjectName.value = '';
+      if (showCreateModal.value) {
+        newProjectName.value = '';
+      }
     }
   } catch (error) {
     console.error('[HomePage] Error generating project name:', error);
     // Leave blank on error as requested
-    newProjectName.value = '';
+    if (showCreateModal.value) {
+      newProjectName.value = '';
+    }
   } finally {
     isGeneratingProjectName.value = false;
   }
@@ -671,7 +1011,37 @@ async function loadProjects() {
   }
 }
 
+function closeCreateModal() {
+  showCreateModal.value = false;
+  newProjectName.value = '';
+  createError.value = '';
+  hasGeneratedNameForCurrentSession.value = false;
+  pendingAIPrompt.value = null;
+}
+
+function handleCreateModalKeydown(event) {
+  // Prevent any action if currently generating a name
+  if (isGeneratingProjectName.value) {
+    event.preventDefault();
+    return;
+  }
+
+  if (event.key === 'Enter') {
+    event.preventDefault();
+    createBlankProject();
+  } else if (event.key === 'Escape') {
+    event.preventDefault();
+    closeCreateModal();
+  }
+}
+
 async function createBlankProject() {
+  // Prevent creation if currently generating a name
+  if (isGeneratingProjectName.value) {
+    console.log('[HomePage] Cannot create project while generating name');
+    return;
+  }
+
   createError.value = ''
   if (!newProjectName.value.trim()) {
     createError.value = 'Project name is required.'
@@ -685,19 +1055,26 @@ async function createBlankProject() {
       console.log('Create project response:', res)
 
       if (res.success) {
+        // Clean up state immediately to prevent any interference
+        const pendingPrompt = pendingAIPrompt.value;
+        const selectedBoardValue = selectedBoard.value;
+        
         showCreateModal.value = false
         newProjectName.value = ''
+        hasGeneratedNameForCurrentSession.value = false;
+        isGeneratingProjectName.value = false; // Ensure generation flag is reset
+        
         await loadProjects()
         if (res.project) {
-          if (pendingAIPrompt.value) {
+          if (pendingPrompt) {
             const threadId = window.crypto?.randomUUID ? window.crypto.randomUUID() : Math.random().toString(36).slice(2);
             const dataToStore = {
-              prompt: pendingAIPrompt.value.prompt,
-              imageDataUrl: pendingAIPrompt.value.imageDataUrl,
+              prompt: pendingPrompt.prompt,
+              imageDataUrl: pendingPrompt.imageDataUrl,
               threadId,
               projectDir: res.project.dir,
               selectedModel: 'gemini-2.5-flash-preview-05-20', // Store the selected model - NOW HARDCODED
-              selectedBoard: selectedBoard.value // Store the selected board
+              selectedBoard: selectedBoardValue // Store the selected board
             };
             console.log('[HomePage] Saving to localStorage:', JSON.stringify(dataToStore)); // Log what's being saved
             localStorage.setItem('embedr-pending-ai-query', JSON.stringify(dataToStore));
@@ -906,13 +1283,23 @@ const sortedProjects = computed(() => {
   })
 })
 
-watch(showCreateModal, (val) => {
+watch(showCreateModal, async (val) => {
   if (val) {
-    nextTick(() => {
-      if (newProjectNameInput.value) {
-        newProjectNameInput.value.focus()
-      }
-    })
+    // Wait for the modal to be fully rendered
+    await nextTick();
+    await nextTick();
+    
+    // Only focus if no name generation is happening (it will focus itself)
+    if (!isGeneratingProjectName.value) {
+      setTimeout(() => {
+        if (newProjectNameInput.value && showCreateModal.value) {
+          newProjectNameInput.value.focus();
+          if (newProjectName.value) {
+            newProjectNameInput.value.select();
+          }
+        }
+      }, 100);
+    }
   }
 })
 
@@ -955,6 +1342,9 @@ onMounted(() => {
       autoResizeTextarea();
     }
   });
+
+  // Initialize app (includes update checking) - only runs once per app session
+  initializeApp();
 })
 
 onUnmounted(() => {

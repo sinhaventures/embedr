@@ -157,12 +157,31 @@ app.on('window-all-closed', () => {
 
 
 
-let PROJECTS_FILE;
-if (app.isPackaged) {
-  PROJECTS_FILE = path.join(process.resourcesPath, 'projects.json');
-} else {
-  PROJECTS_FILE = path.resolve(APP_ROOT, 'projects.json');
+// Helper function to get the projects directory
+function getProjectsDirectory() {
+  return path.join(os.homedir(), 'EmbedrProjects');
 }
+
+// Helper function to get the Embedr data directory within projects
+function getEmbedrDataDirectory() {
+  const projectsDir = getProjectsDirectory();
+  const dataDir = path.join(projectsDir, '.embedr');
+  
+  // Ensure the data directory exists
+  if (!fs.existsSync(projectsDir)) {
+    fs.mkdirSync(projectsDir, { recursive: true });
+  }
+  if (!fs.existsSync(dataDir)) {
+    fs.mkdirSync(dataDir, { recursive: true });
+  }
+  
+  return dataDir;
+}
+
+let PROJECTS_FILE;
+// Always store projects.json in the projects directory
+const embedrDataDir = getEmbedrDataDirectory();
+PROJECTS_FILE = path.join(embedrDataDir, 'projects.json');
 
 function getProjectsMetadata() {
   if (!fs.existsSync(PROJECTS_FILE)) return [];
@@ -262,18 +281,73 @@ function getBundledArduinoCliPath() {
 }
 
 function getArduinoCliDataDir() {
-  if (app.isPackaged) {
-    return path.join(process.resourcesPath, 'arduino-cli', 'data');
-  } else {
-    // Development path: resources/arduino-cli/data
-    return path.resolve(__dirname, 'resources', 'arduino-cli', 'data');
+  // Store Arduino CLI data in the projects directory instead of app resources
+  const embedrDataDir = getEmbedrDataDirectory();
+  const arduinoDataDir = path.join(embedrDataDir, 'arduino-cli');
+  
+  // Ensure the Arduino CLI data directory exists
+  if (!fs.existsSync(arduinoDataDir)) {
+    fs.mkdirSync(arduinoDataDir, { recursive: true });
   }
+  
+  return arduinoDataDir;
 }
 
 function getArduinoCliConfigFile() {
   // The config file is within the data directory
   return path.join(getArduinoCliDataDir(), 'arduino-cli.yaml');
 }
+
+// Helper function to create default Arduino CLI configuration
+function createDefaultArduinoCliConfig() {
+  const configFile = getArduinoCliConfigFile();
+  
+  // Only create if it doesn't exist
+  if (!fs.existsSync(configFile)) {
+    const defaultConfig = `# Arduino CLI Configuration for Embedr
+# This configuration ensures portable operation with user projects
+
+directories:
+  data: .
+  downloads: ./downloads
+  user: ./user
+
+# Network configuration for reliable downloads
+network:
+  connection_timeout: 1800s  # 30 minutes for slow connections
+  user_agent_ext: "embedr-app"
+
+# Disable telemetry for privacy
+telemetry:
+  enabled: false
+
+# Updater configuration
+updater:
+  enable_notification: false
+
+# Board manager settings
+board_manager:
+  additional_urls: []
+
+# Library settings
+library:
+  enable_unsafe_install: false
+
+# Logging
+logging:
+  level: "info"
+`;
+    
+    try {
+      fs.writeFileSync(configFile, defaultConfig, 'utf-8');
+      console.log(`Created default Arduino CLI config at: ${configFile}`);
+    } catch (error) {
+      console.error(`Failed to create Arduino CLI config: ${error.message}`);
+    }
+  }
+}
+
+
 
 const arduinoCliPath = getBundledArduinoCliPath();
 const arduinoDataDir = getArduinoCliDataDir();
@@ -283,21 +357,21 @@ console.log(`Using arduino-cli: ${arduinoCliPath}`);
 console.log(`Using arduino-cli data dir: ${arduinoDataDir}`);
 console.log(`Using arduino-cli config file: ${arduinoConfigFile}`);
 
+// Create default Arduino CLI configuration
+createDefaultArduinoCliConfig();
+
 // Sanity check (optional, but good for debugging)
 if (!fs.existsSync(arduinoCliPath)) {
   console.error(`ERROR: Bundled arduino-cli not found at ${arduinoCliPath}. Please ensure it is downloaded and placed correctly, then run 'npm run prepare-arduino'.`);
-}
-if (!fs.existsSync(arduinoConfigFile)) {
-  console.error(`ERROR: Bundled arduino-cli config not found at ${arduinoConfigFile}. Make sure it was created by the setup.`);
 }
 
 // Ensure Arduino CLI is configured with extended network timeout
 async function ensureArduinoCliTimeout() {
   try {
     console.log('[setup] Configuring Arduino CLI network timeout...');
-    const timeoutCommand = `"${arduinoCliPath}" config set network.connection_timeout 1800s --config-file "${arduinoConfigFile}"`;
+    const timeoutCommand = `"${arduinoCliPath}" config set network.connection_timeout 1800s --config-file "${arduinoConfigFile}" --config-dir "${arduinoDataDir}"`;
     await new Promise((resolve, reject) => {
-      exec(timeoutCommand, (error, stdout, stderr) => {
+      exec(timeoutCommand, { cwd: arduinoDataDir }, (error, stdout, stderr) => {
         if (error) {
           console.warn('[setup] Failed to set Arduino CLI timeout:', error.message);
           reject(error);
@@ -332,7 +406,7 @@ ipcMain.handle('compile-sketch', async (event, baseFqbn, options, sketchPath) =>
     const command = `"${arduinoCliPath}" compile --fqbn ${fullFqbn} "${sketchPath}" --format json --config-file "${arduinoConfigFile}" --config-dir "${arduinoDataDir}"`; // Changed to --config-dir
     console.log(`[compile-sketch] Executing command: ${command}`);
     
-    exec(command, (error, stdout, stderr) => {
+    exec(command, { cwd: arduinoDataDir }, (error, stdout, stderr) => {
       if (error) {
         console.error('[compile-sketch] Error:', stderr || error);
         // Send both stdout and stderr on error for more context
@@ -365,7 +439,7 @@ ipcMain.handle('upload-sketch', async (event, baseFqbn, options, port, sketchPat
     const command = `"${arduinoCliPath}" upload -p "${port}" --fqbn ${fullFqbn} "${sketchPath}" --verbose --config-file "${arduinoConfigFile}" --config-dir "${arduinoDataDir}"`;
     console.log(`[upload-sketch] Executing command: ${command}`);
      
-    exec(command, (error, stdout, stderr) => {
+    exec(command, { cwd: arduinoDataDir }, (error, stdout, stderr) => {
       if (error) { // arduino-cli command itself failed (e.g., non-zero exit code)
         console.error('[upload-sketch] CLI Error:', error);
         console.error('[upload-sketch] CLI Stderr:', stderr);
@@ -391,8 +465,8 @@ ipcMain.handle('list-projects', async () => {
 ipcMain.handle('create-project', async (event, projectName) => {
   const safeName = projectName.replace(/[^a-zA-Z0-9_-]/g, '');
   if (!safeName) return { success: false, error: 'Invalid project name' };
-  const projectsDir = path.join(os.homedir(), 'EmbedrProjects');
-  if (!fs.existsSync(projectsDir)) fs.mkdirSync(projectsDir);
+  const projectsDir = getProjectsDirectory();
+  if (!fs.existsSync(projectsDir)) fs.mkdirSync(projectsDir, { recursive: true });
   const projectDir = path.join(projectsDir, safeName);
   if (fs.existsSync(projectDir)) return { success: false, error: 'Project already exists' };
   fs.mkdirSync(projectDir);
@@ -502,7 +576,7 @@ ipcMain.handle('list-boards', async () => {
   console.log('list-boards handler called');
   return new Promise((resolve) => {
     const command = `"${arduinoCliPath}" board list --format json --config-file "${arduinoConfigFile}" --config-dir "${arduinoDataDir}"`; // Changed to --config-dir
-    exec(command, (error, stdout, stderr) => {
+    exec(command, { cwd: arduinoDataDir }, (error, stdout, stderr) => {
       if (error) {
         console.error('arduino-cli error:', stderr || error.message);
         resolve({ success: false, error: stderr || error.message });
@@ -534,7 +608,9 @@ ipcMain.handle('list-boards', async () => {
 ipcMain.handle('list-all-boards', async () => {
   return new Promise((resolve) => {
     const cliArgs = ['board', 'listall', '--format', 'json', '--config-file', arduinoConfigFile, '--config-dir', arduinoDataDir]; // Already changed, confirming consistency
-    const child = spawn(arduinoCliPath, cliArgs);
+    const child = spawn(arduinoCliPath, cliArgs, {
+      cwd: arduinoDataDir
+    });
     let stdout = '';
     let stderr = '';
 
@@ -594,7 +670,7 @@ ipcMain.handle('list-all-boards', async () => {
 ipcMain.handle('lib-search', async (event, query) => {
   return new Promise((resolve) => {
     const command = `"${arduinoCliPath}" lib search "${query}" --format json --config-file "${arduinoConfigFile}" --config-dir "${arduinoDataDir}"`; // Changed to --config-dir
-    exec(command, { maxBuffer: 1024 * 1024 * 10 }, (error, stdout, stderr) => {
+    exec(command, { maxBuffer: 1024 * 1024 * 10, cwd: arduinoDataDir }, (error, stdout, stderr) => {
       if (error) {
         resolve({ success: false, error: stderr || error.message });
         return;
@@ -625,7 +701,7 @@ ipcMain.handle('lib-install', async (event, name, version) => {
     const command = `"${arduinoCliPath}" lib install ${quotedLibArg} --config-file "${arduinoConfigFile}" --config-dir "${arduinoDataDir}"`; // Changed to --config-dir
 
     console.log(`[lib-install] Executing command: ${command}`);
-    const childProcess = exec(command, (error, stdout, stderr) => {
+    const childProcess = exec(command, { cwd: arduinoDataDir }, (error, stdout, stderr) => {
       if (error) {
         console.error('[lib-install] Installation error:', error);
         console.error('[lib-install] stderr:', stderr);
@@ -637,7 +713,7 @@ ipcMain.handle('lib-install', async (event, name, version) => {
       
       // Verify installation by checking if library exists
       const verifyCommand = `"${arduinoCliPath}" lib list --format json --config-file "${arduinoConfigFile}" --config-dir "${arduinoDataDir}"`; // Changed to --config-dir
-      exec(verifyCommand, (verifyError, verifyStdout) => {
+      exec(verifyCommand, { cwd: arduinoDataDir }, (verifyError, verifyStdout) => {
         if (verifyError) {
           console.error('[lib-install] Verification error:', verifyError);
           resolve({ success: false, error: 'Failed to verify installation' });
@@ -692,7 +768,7 @@ ipcMain.handle('lib-install', async (event, name, version) => {
 ipcMain.handle('lib-uninstall', async (event, name) => {
   return new Promise((resolve) => {
     const command = `"${arduinoCliPath}" lib uninstall "${name}" --config-file "${arduinoConfigFile}" --config-dir "${arduinoDataDir}"`; // Changed to --config-dir
-    exec(command, (error, stdout, stderr) => {
+    exec(command, { cwd: arduinoDataDir }, (error, stdout, stderr) => {
       if (error) {
         resolve({ success: false, error: stderr || error.message });
         return;
@@ -705,7 +781,7 @@ ipcMain.handle('lib-uninstall', async (event, name) => {
 ipcMain.handle('lib-list', async () => {
   return new Promise((resolve) => {
     const command = `"${arduinoCliPath}" lib list --format json --config-file "${arduinoConfigFile}" --config-dir "${arduinoDataDir}"`; // Changed to --config-dir
-    exec(command, (error, stdout, stderr) => {
+    exec(command, { cwd: arduinoDataDir }, (error, stdout, stderr) => {
       if (error) {
         resolve({ success: false, error: stderr || error.message });
         return;
@@ -723,7 +799,7 @@ ipcMain.handle('lib-list', async () => {
 ipcMain.handle('lib-update-index', async () => {
   return new Promise((resolve) => {
     const command = `"${arduinoCliPath}" lib update-index --config-file "${arduinoConfigFile}" --config-dir "${arduinoDataDir}"`; // Changed to --config-dir
-    exec(command, (error, stdout, stderr) => {
+    exec(command, { cwd: arduinoDataDir }, (error, stdout, stderr) => {
       if (error) {
         resolve({ success: false, error: stderr || error.message });
         return;
@@ -750,7 +826,7 @@ ipcMain.handle('core-update-index', async () => {
     
     const childProcess = spawn(arduinoCliPath, args, {
       stdio: ['pipe', 'pipe', 'pipe'],
-      shell: true
+      cwd: arduinoDataDir
     });
 
     let stdout = '';
@@ -808,7 +884,7 @@ ipcMain.handle('core-update-index', async () => {
 ipcMain.handle('core-list', async () => {
   return new Promise((resolve) => {
     const command = `"${arduinoCliPath}" core list --format json --config-file "${arduinoConfigFile}" --config-dir "${arduinoDataDir}"`;
-    exec(command, (error, stdout, stderr) => {
+    exec(command, { cwd: arduinoDataDir }, (error, stdout, stderr) => {
       if (error) {
         resolve({ success: false, error: stderr || error.message });
         return;
@@ -828,7 +904,8 @@ ipcMain.handle('core-search', async (event, query) => {
     const command = `"${arduinoCliPath}" core search "${query}" --format json --config-file "${arduinoConfigFile}" --config-dir "${arduinoDataDir}"`;
     exec(command, { 
       maxBuffer: 1024 * 1024 * 10,
-      timeout: 2 * 60 * 1000 // 2 minutes timeout for searches
+      timeout: 2 * 60 * 1000, // 2 minutes timeout for searches
+      cwd: arduinoDataDir
     }, (error, stdout, stderr) => {
       if (error) {
         resolve({ success: false, error: stderr || error.message });
@@ -862,7 +939,7 @@ ipcMain.handle('core-install', async (event, platformPackage) => {
       
       const childProcess = spawn(arduinoCliPath, args, {
         stdio: ['pipe', 'pipe', 'pipe'],
-        shell: true
+        cwd: arduinoDataDir
       });
 
       let stdout = '';
@@ -1020,7 +1097,7 @@ ipcMain.handle('core-install', async (event, platformPackage) => {
 ipcMain.handle('core-uninstall', async (event, platformPackage) => {
   return new Promise((resolve) => {
     const command = `"${arduinoCliPath}" core uninstall "${platformPackage}" --format json --config-file "${arduinoConfigFile}" --config-dir "${arduinoDataDir}"`;
-    exec(command, (error, stdout, stderr) => {
+    exec(command, { cwd: arduinoDataDir }, (error, stdout, stderr) => {
       if (error) {
         resolve({ success: false, error: stderr || error.message });
         return;
@@ -1050,7 +1127,7 @@ ipcMain.handle('core-upgrade', async (event, platformPackage) => {
     
     const childProcess = spawn(arduinoCliPath, args, {
       stdio: ['pipe', 'pipe', 'pipe'],
-      shell: true
+      cwd: arduinoDataDir
     });
 
     let stdout = '';
@@ -1122,7 +1199,7 @@ ipcMain.handle('core-upgrade', async (event, platformPackage) => {
 ipcMain.handle('board-manager-config-get', async () => {
   return new Promise((resolve) => {
     const command = `"${arduinoCliPath}" config dump --config-dir "${arduinoDataDir}"`;
-    exec(command, (error, stdout, stderr) => {
+    exec(command, { cwd: arduinoDataDir }, (error, stdout, stderr) => {
       if (error) {
         resolve({ success: false, error: stderr || error.message });
         return;
@@ -1173,7 +1250,7 @@ ipcMain.handle('board-manager-add-url', async (event, url) => {
     
     console.log('[board-manager-add-url] Executing:', command);
     
-    exec(command, (error, stdout, stderr) => {
+    exec(command, { cwd: arduinoDataDir }, (error, stdout, stderr) => {
       console.log('[board-manager-add-url] Command completed');
       console.log('[board-manager-add-url] stdout:', stdout);
       console.log('[board-manager-add-url] stderr:', stderr);
@@ -1217,7 +1294,7 @@ ipcMain.handle('board-manager-remove-url', async (event, url) => {
     
     console.log('[board-manager-remove-url] Executing:', command);
     
-    exec(command, (error, stdout, stderr) => {
+    exec(command, { cwd: arduinoDataDir }, (error, stdout, stderr) => {
       console.log('[board-manager-remove-url] Command completed');
       console.log('[board-manager-remove-url] stdout:', stdout);
       console.log('[board-manager-remove-url] stderr:', stderr);
@@ -3012,7 +3089,7 @@ ipcMain.handle('get-board-options', async (event, baseFqbn) => {
   return new Promise((resolve) => {
     const command = `"${arduinoCliPath}" board details --fqbn "${baseFqbn}" --format json --config-file "${arduinoConfigFile}" --config-dir "${arduinoDataDir}"`;  // Changed to --config-dir
 
-    exec(command, (error, stdout, stderr) => {
+    exec(command, { cwd: arduinoDataDir }, (error, stdout, stderr) => {
       if (error) {
         resolve({ success: false, error: `Failed to get board details: ${stderr || error.message}` });
         return;
@@ -3599,3 +3676,77 @@ ipcMain.handle('show-open-dialog', async (event, options) => {
 });
 
 // === End File Dialog Handlers ===
+
+// === App Update Checking Handler ===
+
+ipcMain.handle('check-app-update', async (event) => {
+  console.log('[check-app-update] Checking for app updates...');
+  
+  try {
+    // Get current version from package.json
+    const packageJson = require(path.join(__dirname, 'package.json'));
+    const currentVersion = packageJson.version;
+    console.log('[check-app-update] Current version:', currentVersion);
+    
+    // Fetch latest release from GitHub API
+    const fetch = require('node-fetch');
+    const response = await fetch('https://api.github.com/repos/sinhaventures/embedr/releases/latest', {
+      headers: {
+        'User-Agent': 'Embedr-App-Update-Checker'
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`GitHub API responded with status: ${response.status}`);
+    }
+    
+    const releaseData = await response.json();
+    const latestVersion = releaseData.tag_name.replace(/^v/, ''); // Remove 'v' prefix if present
+    const releaseUrl = releaseData.html_url;
+    const releaseNotes = releaseData.body || '';
+    
+    console.log('[check-app-update] Latest version:', latestVersion);
+    console.log('[check-app-update] Release URL:', releaseUrl);
+    
+    // Compare versions (simple string comparison for now, works for semantic versioning)
+    const isUpdateAvailable = compareVersions(currentVersion, latestVersion) < 0;
+    
+    return {
+      success: true,
+      updateAvailable: isUpdateAvailable,
+      currentVersion,
+      latestVersion,
+      releaseUrl,
+      releaseNotes,
+      downloadUrl: 'https://www.embedr.cc/download'
+    };
+    
+  } catch (error) {
+    console.error('[check-app-update] Error checking for updates:', error);
+    return {
+      success: false,
+      error: error.message || 'Failed to check for updates',
+      updateAvailable: false
+    };
+  }
+});
+
+// Simple version comparison function
+function compareVersions(version1, version2) {
+  const v1parts = version1.split('.').map(Number);
+  const v2parts = version2.split('.').map(Number);
+  
+  // Pad arrays to same length
+  const maxLength = Math.max(v1parts.length, v2parts.length);
+  while (v1parts.length < maxLength) v1parts.push(0);
+  while (v2parts.length < maxLength) v2parts.push(0);
+  
+  for (let i = 0; i < maxLength; i++) {
+    if (v1parts[i] < v2parts[i]) return -1;
+    if (v1parts[i] > v2parts[i]) return 1;
+  }
+  
+  return 0; // versions are equal
+}
+
+// === End App Update Checking Handler ===
