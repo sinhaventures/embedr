@@ -64,10 +64,9 @@
               :class="[
                 'relative flex-1 px-3 py-1.5 text-xs font-medium rounded-md transition-all duration-200 ease-out whitespace-nowrap',
                 activeTab === 'installed' 
-                  ? 'bg-[#1E1E1E] text-white shadow-lg border border-[#333]' 
+                  ? 'active-tab bg-[#1E1E1E] text-white shadow-lg border border-[#333]' 
                   : 'text-white/60 hover:text-white/80 hover:bg-[#1E1E1E]/50'
               ]"
-              style="box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);"
             >
               Installed & Search
             </button>
@@ -76,10 +75,9 @@
               :class="[
                 'relative flex-1 px-3 py-1.5 text-xs font-medium rounded-md transition-all duration-200 ease-out ml-0.5 whitespace-nowrap',
                 activeTab === 'custom' 
-                  ? 'bg-[#1E1E1E] text-white shadow-lg border border-[#333]' 
+                  ? 'active-tab bg-[#1E1E1E] text-white shadow-lg border border-[#333]' 
                   : 'text-white/60 hover:text-white/80 hover:bg-[#1E1E1E]/50'
               ]"
-              style="box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);"
             >
               Custom URLs
             </button>
@@ -1424,13 +1422,14 @@ function dismissArduinoSetupStatus() {
   background-color: #252525 !important;
 }
 
-/* Tab styling fallbacks for older browsers */
+/* Windows 10 and older browser fallbacks for tabs */
+nav[aria-label="Board Manager tabs"] {
+  background-color: #1A1A1A !important;
+}
+
 nav[aria-label="Board Manager tabs"] button {
-  /* Fallback for shadow-lg on older browsers */
-  -webkit-box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-  -moz-box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-  
+  background-color: transparent;
+  border: 1px solid transparent;
   /* Fallback for rounded corners */
   -webkit-border-radius: 6px;
   -moz-border-radius: 6px;
@@ -1442,10 +1441,31 @@ nav[aria-label="Board Manager tabs"] button {
   -o-transition: all 0.2s ease-out;
   transition: all 0.2s ease-out;
   
-  /* Ensure text doesn't wrap */
+  /* Ensure proper layout */
+  display: inline-block;
+  position: relative;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  min-width: 0;
+}
+
+/* Active tab styling with better fallbacks */
+nav[aria-label="Board Manager tabs"] button.active-tab {
+  background-color: #1E1E1E !important;
+  border-color: #333 !important;
+  color: white !important;
+  
+  /* Fallback shadow for older browsers */
+  -webkit-box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  -moz-box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+/* Hover state with fallbacks */
+nav[aria-label="Board Manager tabs"] button:hover {
+  background-color: rgba(30, 30, 30, 0.5) !important;
+  color: rgba(255, 255, 255, 0.8) !important;
 }
 
 /* Windows 10 specific adjustments */
@@ -1455,12 +1475,17 @@ nav[aria-label="Board Manager tabs"] button {
   }
   
   nav[aria-label="Board Manager tabs"] button {
-    background-color: transparent;
-    border: 1px solid transparent;
+    background-color: transparent !important;
+    border: 1px solid transparent !important;
+  }
+  
+  nav[aria-label="Board Manager tabs"] button.active-tab {
+    background-color: #1E1E1E !important;
+    border-color: #333 !important;
   }
   
   nav[aria-label="Board Manager tabs"] button:hover {
-    background-color: rgba(30, 30, 30, 0.5);
+    background-color: rgba(30, 30, 30, 0.5) !important;
   }
 }
 </style> 

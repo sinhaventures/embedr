@@ -274,32 +274,30 @@
             <div class="bg-card flex flex-col h-full shadow-inner">
               <!-- Tabs -->
               <div class="flex px-4 pt-1.5 pb-1.5 flex-shrink-0">
-                <nav class="inline-flex p-0.5 bg-[#1A1A1A] rounded-lg" aria-label="Tabs" style="min-width: 220px; background-color: #1A1A1A !important;">
-                  <button
-                    @click="activeTab = 'serial'"
-                    :class="[
-                      'relative flex-1 px-2 py-1 text-xs font-medium rounded-md transition-all duration-200 ease-out',
-                      activeTab === 'serial' 
-                        ? 'bg-background text-foreground shadow-lg border border-border' 
-                        : 'text-muted-foreground hover:text-foreground hover:bg-background/50'
-                    ]"
-                    style="box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);"
-                  >
-                    Serial Monitor
-                  </button>
-                  <button
-                    @click="activeTab = 'output'"
-                    :class="[
-                      'relative flex-1 px-2 py-1 text-xs font-medium rounded-md transition-all duration-200 ease-out flex items-center justify-center gap-1 ml-0.5 whitespace-nowrap',
-                      activeTab === 'output' 
-                        ? 'bg-background text-foreground shadow-lg border border-border' 
-                        : 'text-muted-foreground hover:text-foreground hover:bg-background/50'
-                    ]"
-                    style="box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);"
-                  >
-                    Output
-                  </button>
-                </nav>
+                              <nav class="inline-flex p-0.5 bg-[#1A1A1A] rounded-lg" aria-label="Tabs" style="min-width: 220px; background-color: #1A1A1A !important;">
+                <button
+                  @click="activeTab = 'serial'"
+                  :class="[
+                    'relative flex-1 px-2 py-1 text-xs font-medium rounded-md transition-all duration-200 ease-out',
+                    activeTab === 'serial' 
+                      ? 'active-tab bg-background text-foreground shadow-lg border border-border' 
+                      : 'text-muted-foreground hover:text-foreground hover:bg-background/50'
+                  ]"
+                >
+                  Serial Monitor
+                </button>
+                <button
+                  @click="activeTab = 'output'"
+                  :class="[
+                    'relative flex-1 px-2 py-1 text-xs font-medium rounded-md transition-all duration-200 ease-out flex items-center justify-center gap-1 ml-0.5 whitespace-nowrap',
+                    activeTab === 'output' 
+                      ? 'active-tab bg-background text-foreground shadow-lg border border-border' 
+                      : 'text-muted-foreground hover:text-foreground hover:bg-background/50'
+                  ]"
+                >
+                  Output
+                </button>
+              </nav>
               </div>
               <!-- Tab Content -->
               <div
@@ -2099,6 +2097,52 @@ nav[aria-label="Tabs"] button {
   min-width: 0; /* Allow flex items to shrink */
 }
 
+/* Windows 10 and older browser fallbacks for tabs */
+nav[aria-label="Tabs"] {
+  background-color: #1A1A1A !important;
+}
+
+nav[aria-label="Tabs"] button {
+  background-color: transparent;
+  border: 1px solid transparent;
+  /* Fallback for rounded corners */
+  -webkit-border-radius: 6px;
+  -moz-border-radius: 6px;
+  border-radius: 6px;
+  
+  /* Fallback for transitions */
+  -webkit-transition: all 0.2s ease-out;
+  -moz-transition: all 0.2s ease-out;
+  -o-transition: all 0.2s ease-out;
+  transition: all 0.2s ease-out;
+  
+  /* Ensure proper layout */
+  display: inline-block;
+  position: relative;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+/* Active tab styling with better fallbacks */
+nav[aria-label="Tabs"] button.active-tab {
+  background-color: #1E1E1E !important;
+  border-color: #333 !important;
+  color: white !important;
+  
+  /* Fallback shadow for older browsers */
+  -webkit-box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  -moz-box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+/* Hover state with fallbacks */
+nav[aria-label="Tabs"] button:hover {
+  background-color: rgba(30, 30, 30, 0.5) !important;
+  color: rgba(255, 255, 255, 0.8) !important;
+}
+
 /* Windows 10 specific adjustments */
 @media screen and (-ms-high-contrast: active), (-ms-high-contrast: none) {
   nav[aria-label="Tabs"] {
@@ -2106,12 +2150,17 @@ nav[aria-label="Tabs"] button {
   }
   
   nav[aria-label="Tabs"] button {
-    background-color: transparent;
-    border: 1px solid transparent;
+    background-color: transparent !important;
+    border: 1px solid transparent !important;
+  }
+  
+  nav[aria-label="Tabs"] button.active-tab {
+    background-color: #1E1E1E !important;
+    border-color: #333 !important;
   }
   
   nav[aria-label="Tabs"] button:hover {
-    background-color: rgba(30, 30, 30, 0.5);
+    background-color: rgba(30, 30, 30, 0.5) !important;
   }
 }
 </style> 
