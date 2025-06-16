@@ -21,6 +21,29 @@
           </button>
         </div>
 
+        <!-- Arduino AVR Setup Status -->
+        <div v-if="showArduinoSetupStatus" class="mb-6 bg-[#1A1A1A] border border-[#333] rounded-lg p-4">
+          <div class="flex items-center gap-3">
+            <div class="flex items-center gap-2">
+              <Loader2 v-if="isArduinoSetupInProgress" class="h-5 w-5 animate-spin text-blue-400" />
+              <CheckCircle2 v-else-if="arduinoSetupStatus?.status === 'completed' || arduinoSetupStatus?.status === 'already-installed'" class="h-5 w-5 text-green-400" />
+              <AlertCircle v-else-if="arduinoSetupStatus?.status === 'error'" class="h-5 w-5 text-red-400" />
+              <div class="w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center">
+                <span class="text-xs text-white font-bold">A</span>
+              </div>
+            </div>
+            <div class="flex-1">
+              <div class="flex items-center gap-2">
+                <h3 class="text-sm font-medium text-white/90">Arduino Core Setup</h3>
+                <span class="px-2 py-0.5 rounded text-xs" :class="setupStatusBadgeClasses">
+                  {{ setupStatusText }}
+                </span>
+              </div>
+              <p class="text-xs text-white/60 mt-1">{{ setupStatusMessage }}</p>
+            </div>
+          </div>
+        </div>
+
         <!-- Tabs Navigation -->
         <div class="mb-6">
           <nav class="inline-flex p-1 bg-[#252525] rounded-lg tab_switching_bar w-full" aria-label="Board Manager tabs" style="background-color: #252525 !important;">
@@ -419,7 +442,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, watch } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { Button } from '@/components/ui/button';
 import { 
   RefreshCcw, 
@@ -429,7 +452,9 @@ import {
   ArrowUpCircle, 
   Loader2,
   PackageIcon,
-  X
+  X,
+  CheckCircle2,
+  AlertCircle
 } from 'lucide-vue-next';
 
 const props = defineProps({
@@ -473,8 +498,69 @@ const popularUrls = ref([
   { name: 'SparkFun', description: 'SparkFun board package', url: 'https://raw.githubusercontent.com/sparkfun/Arduino_Boards/master/package_sparkfun_index.json' }
 ]);
 
+// Arduino setup status tracking
+const arduinoSetupStatus = ref(null);
+const showArduinoSetupStatus = computed(() => {
+  return arduinoSetupStatus.value !== null && (
+    arduinoSetupStatus.value.status === 'checking' ||
+    arduinoSetupStatus.value.status === 'installing' ||
+    arduinoSetupStatus.value.status === 'updating-index' ||
+    arduinoSetupStatus.value.status === 'error' ||
+    (arduinoSetupStatus.value.status === 'completed' || arduinoSetupStatus.value.status === 'already-installed')
+  );
+});
+const isArduinoSetupInProgress = computed(() => {
+  const status = arduinoSetupStatus.value?.status;
+  return status === 'checking' || status === 'installing' || status === 'updating-index';
+});
+const setupStatusText = computed(() => {
+  const status = arduinoSetupStatus.value?.status;
+  switch (status) {
+    case 'checking': return 'Checking';
+    case 'installing': return 'Installing';
+    case 'updating-index': return 'Updating';
+    case 'completed': return 'Ready';
+    case 'already-installed': return 'Ready';
+    case 'error': return 'Error';
+    case 'skipped': return 'Skipped';
+    default: return 'Unknown';
+  }
+});
+const setupStatusBadgeClasses = computed(() => {
+  const status = arduinoSetupStatus.value?.status;
+  switch (status) {
+    case 'checking':
+    case 'installing':
+    case 'updating-index':
+      return 'bg-blue-900/20 text-blue-400 border border-blue-500/30';
+    case 'completed':
+    case 'already-installed':
+      return 'bg-green-900/20 text-green-400 border border-green-500/30';
+    case 'error':
+      return 'bg-red-900/20 text-red-400 border border-red-500/30';
+    case 'skipped':
+      return 'bg-yellow-900/20 text-yellow-400 border border-yellow-500/30';
+    default:
+      return 'bg-gray-900/20 text-gray-400 border border-gray-500/30';
+  }
+});
+const setupStatusMessage = computed(() => {
+  const status = arduinoSetupStatus.value?.status;
+  const message = arduinoSetupStatus.value?.message;
+  switch (status) {
+    case 'checking': return 'Checking for Arduino core...';
+    case 'installing': return 'Installing Arduino core for basic board support...';
+    case 'updating-index': return 'Updating board package index...';
+    case 'completed': return 'Arduino core installed successfully. Basic boards are now available.';
+    case 'already-installed': return 'Arduino core is already installed and ready to use.';
+    case 'error': return `Setup failed: ${message || 'Unknown error'}`;
+    case 'skipped': return 'Setup was skipped (previously uninstalled by user).';
+    default: return message || 'Arduino core setup status unknown.';
+  }
+});
+
 // Watch for modal visibility to load data when shown
-watch(() => props.show, (newVal) => {
+watch(() => props.show, async (newVal) => {
   if (newVal) {
     loadInstalledCores();
     if (activeTab.value === 'custom') {
@@ -482,9 +568,32 @@ watch(() => props.show, (newVal) => {
     }
     // Register progress event listener
     window.electronAPI.onCoreInstallProgress(handleInstallProgress);
+    // Register Arduino setup status listener
+    if (window.electronAPI?.onArduinoAvrSetupStatus) {
+      window.electronAPI.onArduinoAvrSetupStatus((data) => {
+        console.log('[CoreManagerModal] Arduino setup status:', data);
+        arduinoSetupStatus.value = data;
+      });
+    }
+    
+    // Get current Arduino setup status in case it happened before modal opened
+    if (window.electronAPI?.getArduinoSetupStatus) {
+      try {
+        const currentStatus = await window.electronAPI.getArduinoSetupStatus();
+        if (currentStatus) {
+          console.log('[CoreManagerModal] Current Arduino setup status (on modal open):', currentStatus);
+          arduinoSetupStatus.value = currentStatus;
+        }
+      } catch (error) {
+        console.warn('[CoreManagerModal] Failed to get current Arduino setup status:', error);
+      }
+    }
   } else {
     // Clean up when modal is closed
     window.electronAPI.clearCoreInstallProgressListener();
+    if (window.electronAPI?.clearArduinoAvrSetupStatusListener) {
+      window.electronAPI.clearArduinoAvrSetupStatusListener();
+    }
   }
 });
 
@@ -502,12 +611,35 @@ onMounted(async () => {
     await loadInstalledCores();
     // Register progress event listener
     window.electronAPI.onCoreInstallProgress(handleInstallProgress);
+    // Register Arduino setup status listener
+    if (window.electronAPI?.onArduinoAvrSetupStatus) {
+      window.electronAPI.onArduinoAvrSetupStatus((data) => {
+        console.log('[CoreManagerModal] Arduino setup status:', data);
+        arduinoSetupStatus.value = data;
+      });
+    }
+    
+    // Get current Arduino setup status in case it happened before component mounted
+    if (window.electronAPI?.getArduinoSetupStatus) {
+      try {
+        const currentStatus = await window.electronAPI.getArduinoSetupStatus();
+        if (currentStatus) {
+          console.log('[CoreManagerModal] Current Arduino setup status (on mount):', currentStatus);
+          arduinoSetupStatus.value = currentStatus;
+        }
+      } catch (error) {
+        console.warn('[CoreManagerModal] Failed to get current Arduino setup status:', error);
+      }
+    }
   }
 });
 
 // Clean up event listeners on component unmount
 onUnmounted(() => {
   window.electronAPI.clearCoreInstallProgressListener();
+  if (window.electronAPI?.clearArduinoAvrSetupStatusListener) {
+    window.electronAPI.clearArduinoAvrSetupStatusListener();
+  }
 });
 
 // Load installed board packages
@@ -654,6 +786,10 @@ async function installCore(platformId) {
       showStatus(result.message || `Successfully installed ${platformId}`, 'success');
       // Reload installed board packages to include the newly installed one
       await loadInstalledCores();
+      // Reload installed cores to reflect changes
+      setTimeout(() => {
+        loadInstalledCores();
+      }, 1000);
       // Emit event to notify parent components that a new core was installed
       emit('core-installed', platformId);
     } else {
@@ -755,8 +891,8 @@ async function uninstallCore(platformId) {
     const result = await window.electronAPI.uninstallCore(platformId);
     if (result.success) {
       showStatus(`Successfully uninstalled ${platformId}`, 'success');
-      // Remove from installed board packages list
-      installedCores.value = installedCores.value.filter(core => core.id !== platformId);
+      // Reload installed cores to reflect changes
+      await loadInstalledCores();
       // Emit event to notify parent components that a core was uninstalled
       emit('core-uninstalled', platformId);
     } else {

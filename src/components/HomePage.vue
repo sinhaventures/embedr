@@ -179,13 +179,19 @@
             </svg>
             <span class="group-hover:text-gray-300 transition-colors">Create Blank Project</span>
           </button>
-          <button @click="showCoreManagerModal = true"
-            class="flex items-center gap-2 px-4 py-2 bg-[#1A1A1A] rounded-lg border hover:bg-[#252525] transition-colors">
-            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none"
+          <button @click="openCoreManagerModal"
+            class="flex items-center gap-2 px-4 py-2 bg-[#1A1A1A] rounded-lg border hover:bg-[#252525] transition-colors cursor-pointer"
+            :class="{ 'cursor-wait': isArduinoSetupInProgress }"
+            type="button">
+            <svg v-if="isArduinoSetupInProgress" class="animate-spin w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+            </svg>
+            <svg v-else xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none"
               stroke="currentColor" stroke-width="2">
               <path stroke-linecap="round" stroke-linejoin="round" d="M4 7h16M4 12h16M4 17h16" />
             </svg>
-            Manage Arduino Boards
+            <span>{{ isArduinoSetupInProgress ? arduinoSetupStatusText : 'Manage Arduino Boards' }}</span>
           </button>
           <div class="flex-1 border-t border-white/10"></div>
         </div>
@@ -495,6 +501,34 @@ const showCoreManagerModal = ref(false);
 const isGeneratingProjectName = ref(false);
 const hasGeneratedNameForCurrentSession = ref(false);
 
+// Arduino setup status tracking
+const arduinoSetupStatus = ref(null);
+const isArduinoSetupInProgress = computed(() => {
+  const status = arduinoSetupStatus.value?.status;
+  return status === 'checking' || status === 'installing' || status === 'updating-index';
+});
+const arduinoSetupStatusText = computed(() => {
+  const status = arduinoSetupStatus.value?.status;
+  switch (status) {
+    case 'checking':
+      return 'Checking boards...';
+    case 'installing':
+      return 'Setting up boards...';
+    case 'updating-index':
+      return 'Updating boards...';
+    case 'completed':
+      return 'Boards ready';
+    case 'already-installed':
+      return 'Boards ready';
+    case 'error':
+      return 'Board setup failed';
+    case 'skipped':
+      return 'Board setup skipped';
+    default:
+      return 'Setting up boards...';
+  }
+});
+
 const isProUser = computed(() => {
   const planId = subscription.value?.planId;
   const status = subscription.value?.status;
@@ -571,6 +605,16 @@ async function fetchBoards() {
           // Optionally default to the first board if no valid selection
           // selectedBoard.value = boards.value[0].value;
         }
+        
+        // If boards are loaded successfully and Arduino setup is complete, clear the status
+        // to prevent the "Boards ready" text from persisting indefinitely
+        if (boards.value.length > 0 && 
+            arduinoSetupStatus.value && 
+            (arduinoSetupStatus.value.status === 'completed' || arduinoSetupStatus.value.status === 'already-installed')) {
+          setTimeout(() => {
+            arduinoSetupStatus.value = null;
+          }, 2000); // Clear after 2 seconds to give user time to see "Boards ready"
+        }
       } else {
         console.error('[HomePage] Failed to get boards:', res);
       }
@@ -587,24 +631,40 @@ watch(selectedBoard, (newValue) => {
   localStorage.setItem(LOCALSTORAGE_BOARD_KEY_HOME, newValue || '');
 });
 
+// Function to open core manager modal
+function openCoreManagerModal() {
+  console.log('[HomePage] Opening Core Manager Modal...', showCoreManagerModal.value);
+  showCoreManagerModal.value = true;
+  console.log('[HomePage] Core Manager Modal opened:', showCoreManagerModal.value);
+}
+
 // Handle core installation/uninstallation events from CoreManagerModal
 function handleCoreInstalled(platformId) {
   console.log(`[HomePage] Core installed: ${platformId}, refreshing board list...`);
-  fetchBoards();
+  // Refresh board list after a short delay to ensure core is fully installed
+  setTimeout(() => {
+    fetchBoards();
+  }, 1000);
   // Dispatch global event to notify other components
   window.dispatchEvent(new CustomEvent('core-installed', { detail: platformId }));
 }
 
 function handleCoreUninstalled(platformId) {
   console.log(`[HomePage] Core uninstalled: ${platformId}, refreshing board list...`);
-  fetchBoards();
+  // Refresh board list after a short delay
+  setTimeout(() => {
+    fetchBoards();
+  }, 1000);
   // Dispatch global event to notify other components
   window.dispatchEvent(new CustomEvent('core-uninstalled', { detail: platformId }));
 }
 
 function handleCoreUpgraded(platformId) {
   console.log(`[HomePage] Core upgraded: ${platformId}, refreshing board list...`);
-  fetchBoards();
+  // Refresh board list after a short delay
+  setTimeout(() => {
+    fetchBoards();
+  }, 1000);
   // Dispatch global event to notify other components
   window.dispatchEvent(new CustomEvent('core-upgraded', { detail: platformId }));
 }
@@ -1321,7 +1381,7 @@ watch(aiPrompt, () => {
   });
 })
 
-onMounted(() => {
+onMounted(async () => {
   loadProjects()
   fetchBoards() // Fetch boards on mount
   if (!isAuthenticated()) {
@@ -1343,12 +1403,47 @@ onMounted(() => {
     }
   });
 
+  // Listen for arduino setup status updates
+  if (window.electronAPI?.onArduinoAvrSetupStatus) {
+    window.electronAPI.onArduinoAvrSetupStatus((data) => {
+      console.log('[HomePage] Arduino setup status:', data);
+      arduinoSetupStatus.value = data;
+    });
+  }
+
+  // Listen for board list refresh events
+  if (window.electronAPI?.onRefreshBoardList) {
+    window.electronAPI.onRefreshBoardList((data) => {
+      console.log('[HomePage] Received refresh-board-list event:', data);
+      // Refresh board list with a slight delay to ensure core installation is complete
+      setTimeout(() => {
+        fetchBoards();
+      }, 500);
+    });
+  }
+
+  // Get current Arduino setup status in case it happened before component mounted
+  if (window.electronAPI?.getArduinoSetupStatus) {
+    const currentStatus = await window.electronAPI.getArduinoSetupStatus();
+    if (currentStatus) {
+      console.log('[HomePage] Current Arduino setup status:', currentStatus);
+      arduinoSetupStatus.value = currentStatus;
+    }
+  }
+
   // Initialize app (includes update checking) - only runs once per app session
   initializeApp();
 })
 
 onUnmounted(() => {
-  // cleanupSubscription(); // No longer needed with global state
+  // Clean up arduino setup status listener
+  if (window.electronAPI?.clearArduinoAvrSetupStatusListener) {
+    window.electronAPI.clearArduinoAvrSetupStatusListener();
+  }
+  // Clean up board refresh listener
+  if (window.electronAPI?.clearRefreshBoardListListener) {
+    window.electronAPI.clearRefreshBoardListListener();
+  }
 });
 </script>
 

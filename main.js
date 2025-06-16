@@ -135,6 +135,12 @@ function createWindow () {
 app.whenReady().then(() => {
   createWindow();
 
+  // Ensure arduino:avr core is installed after window is created
+  // Wait a bit for the window to fully load before starting Arduino setup
+  setTimeout(() => {
+    ensureArduinoAvrCore();
+  }, 2000);
+
   app.on('activate', () => {
     // On OS X it's common to re-create a window in the app when the
     // dock icon is clicked and there are no other windows open.
@@ -386,8 +392,198 @@ async function ensureArduinoCliTimeout() {
   }
 }
 
+// Track if user has explicitly uninstalled arduino:avr to prevent re-installation
+function hasUserUninstalledArduinoAvr() {
+  try {
+    const flagFile = path.join(getEmbedrDataDirectory(), '.arduino_avr_uninstalled');
+    return fs.existsSync(flagFile);
+  } catch (error) {
+    return false;
+  }
+}
+
+function markArduinoAvrAsUninstalled() {
+  try {
+    const flagFile = path.join(getEmbedrDataDirectory(), '.arduino_avr_uninstalled');
+    fs.writeFileSync(flagFile, new Date().toISOString());
+  } catch (error) {
+    console.warn('[setup] Could not create uninstall flag:', error.message);
+  }
+}
+
+// Ensure arduino:avr core is installed (runs once on startup)
+async function ensureArduinoAvrCore() {
+  try {
+    console.log('[setup] Checking for arduino:avr core...');
+    
+    // Check if user has explicitly uninstalled arduino:avr
+    if (hasUserUninstalledArduinoAvr()) {
+      console.log('[setup] User has previously uninstalled arduino:avr core, skipping auto-installation');
+      // Send status to frontend
+      sendArduinoSetupStatus({
+        status: 'skipped',
+        reason: 'User previously uninstalled',
+        timestamp: new Date().toISOString()
+      });
+      return;
+    }
+    
+    // Send initial status to frontend
+    sendArduinoSetupStatus({
+      status: 'checking',
+      message: 'Checking for arduino:avr core...',
+      timestamp: new Date().toISOString()
+    });
+    
+    // First check if core is already installed
+    const listCommand = `"${arduinoCliPath}" core list --format json --config-file "${arduinoConfigFile}" --config-dir "${arduinoDataDir}"`;
+    
+    const isInstalled = await new Promise((resolve) => {
+      exec(listCommand, { cwd: arduinoDataDir }, (error, stdout, stderr) => {
+        if (error) {
+          console.log('[setup] Core list failed, will attempt fresh installation');
+          resolve(false);
+          return;
+        }
+        
+        try {
+          const data = JSON.parse(stdout);
+          const platforms = data.platforms || [];
+          const avrCore = platforms.find(p => p.id === 'arduino:avr');
+          
+          if (avrCore) {
+            console.log(`[setup] arduino:avr core already installed (version ${avrCore.installed})`);
+            resolve(true);
+          } else {
+            console.log('[setup] arduino:avr core not found, will install');
+            resolve(false);
+          }
+        } catch (parseError) {
+          console.log('[setup] Failed to parse core list, will attempt installation');
+          resolve(false);
+        }
+      });
+    });
+    
+    if (isInstalled) {
+      // Send completion status to frontend
+      sendArduinoSetupStatus({
+        status: 'already-installed',
+        message: 'arduino:avr core already installed',
+        timestamp: new Date().toISOString()
+      });
+      // Trigger board list refresh even if already installed to ensure boards are populated
+      setTimeout(() => {
+        if (mainWindow && mainWindow.webContents) {
+          mainWindow.webContents.send('refresh-board-list', { 
+            reason: 'arduino:avr already installed',
+            timestamp: new Date().toISOString()
+          });
+          console.log('[setup] Sent refresh-board-list event for already installed arduino:avr');
+        }
+      }, 1000);
+      return;
+    }
+    
+    console.log('[setup] Installing arduino:avr core...');
+    
+    // Send installation start status to frontend
+    sendArduinoSetupStatus({
+      status: 'installing',
+      message: 'Installing arduino:avr core...',
+      timestamp: new Date().toISOString()
+    });
+    
+    // Update index first
+    const updateCommand = `"${arduinoCliPath}" core update-index --config-file "${arduinoConfigFile}" --config-dir "${arduinoDataDir}"`;
+    await new Promise((resolve, reject) => {
+      exec(updateCommand, { cwd: arduinoDataDir, timeout: 60000 }, (error, stdout, stderr) => {
+        if (error) {
+          console.warn('[setup] Failed to update core index:', error.message);
+          sendArduinoSetupStatus({
+            status: 'error',
+            message: 'Failed to update core index',
+            error: error.message,
+            timestamp: new Date().toISOString()
+          });
+          reject(error);
+        } else {
+          console.log('[setup] Core index updated successfully');
+          sendArduinoSetupStatus({
+            status: 'updating-index',
+            message: 'Core index updated, installing core...',
+            timestamp: new Date().toISOString()
+          });
+          resolve(stdout);
+        }
+      });
+    });
+    
+    // Install arduino:avr core
+    const installCommand = `"${arduinoCliPath}" core install arduino:avr --config-file "${arduinoConfigFile}" --config-dir "${arduinoDataDir}"`;
+    await new Promise((resolve, reject) => {
+      exec(installCommand, { cwd: arduinoDataDir, timeout: 120000 }, (error, stdout, stderr) => {
+        if (error) {
+          console.error('[setup] Failed to install arduino:avr core:', error.message);
+          sendArduinoSetupStatus({
+            status: 'error',
+            message: 'Failed to install arduino:avr core',
+            error: error.message,
+            timestamp: new Date().toISOString()
+          });
+          reject(error);
+        } else {
+          console.log('[setup] arduino:avr core installed successfully!');
+          sendArduinoSetupStatus({
+            status: 'completed',
+            message: 'arduino:avr core installed successfully',
+            timestamp: new Date().toISOString()
+          });
+          // Trigger board list refresh after successful installation
+          setTimeout(() => {
+            if (mainWindow && mainWindow.webContents) {
+              mainWindow.webContents.send('refresh-board-list', { 
+                reason: 'arduino:avr core installed',
+                timestamp: new Date().toISOString()
+              });
+              console.log('[setup] Sent refresh-board-list event after arduino:avr installation');
+            }
+          }, 1000);
+          resolve(stdout);
+        }
+      });
+    });
+    
+  } catch (error) {
+    console.error('[setup] Error ensuring arduino:avr core:', error.message);
+    sendArduinoSetupStatus({
+      status: 'error',
+      message: 'Error during arduino:avr core setup',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+    // Don't throw the error - let the app continue even if core installation fails
+  }
+}
+
 // Configure Arduino CLI timeout on startup  
 ensureArduinoCliTimeout();
+
+// Store Arduino setup status globally to send to frontend when requested
+let lastArduinoSetupStatus = null;
+
+// Helper function to send Arduino setup status and store it globally
+function sendArduinoSetupStatus(statusData) {
+  lastArduinoSetupStatus = statusData;
+  if (mainWindow && mainWindow.webContents) {
+    mainWindow.webContents.send('arduino-avr-setup-status', statusData);
+  }
+}
+
+// IPC handler to get the current Arduino setup status
+ipcMain.handle('get-arduino-setup-status', async () => {
+  return lastArduinoSetupStatus;
+});
 
 ipcMain.handle('compile-sketch', async (event, baseFqbn, options, sketchPath) => { // Added options, adjusted order
   console.log('[compile-sketch] Handler called with:', { baseFqbn, options, sketchPath });
@@ -1102,6 +1298,13 @@ ipcMain.handle('core-uninstall', async (event, platformPackage) => {
         resolve({ success: false, error: stderr || error.message });
         return;
       }
+      
+      // If arduino:avr core was uninstalled, mark it to prevent auto-reinstallation
+      if (platformPackage === 'arduino:avr') {
+        console.log('[core-uninstall] User uninstalled arduino:avr core, marking to prevent auto-reinstallation');
+        markArduinoAvrAsUninstalled();
+      }
+      
       try {
         let resultData = {};
         if (stdout.trim()) {

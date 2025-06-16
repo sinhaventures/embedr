@@ -45,6 +45,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
   clearCoreInstallProgressListener: () => {
     ipcRenderer.removeAllListeners('core-install-progress');
   },
+  onArduinoAvrSetupStatus: (callback) => ipcRenderer.on('arduino-avr-setup-status', (_event, data) => callback(data)),
+  clearArduinoAvrSetupStatusListener: () => {
+    ipcRenderer.removeAllListeners('arduino-avr-setup-status');
+  },
+  getArduinoSetupStatus: () => ipcRenderer.invoke('get-arduino-setup-status'),
+  onRefreshBoardList: (callback) => ipcRenderer.on('refresh-board-list', (_event, data) => callback(data)),
+  clearRefreshBoardListListener: () => {
+    ipcRenderer.removeAllListeners('refresh-board-list');
+  },
   // --- END Arduino Core Management API ---
 
   // --- Custom Board URL Management API ---

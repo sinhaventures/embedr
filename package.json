@@ -13,7 +13,6 @@
     "electron:dev": "cross-env NODE_ENV=production concurrently -k \"vite --host\" \"wait-on tcp:5173 && electron ./main.js\"",
     "electron:prod": "cross-env NODE_ENV=production concurrently -k \"vite --host\" \"wait-on tcp:5173 && electron ./main.js\"",
     "electron:build": "cross-env NODE_ENV=production vite build && electron-builder",
-    "electron:build:win:allarch": "cross-env NODE_ENV=production vite build && electron-builder --win --x64 --ia32 --arm64",
     "electron:start": "cross-env NODE_ENV=production vite build && electron .",
     "emulators:start": "firebase emulators:start",
     "dev:emulators": "cross-env NODE_ENV=development concurrently -k \"firebase emulators:start\" \"vite --host\" \"wait-on tcp:5173 && electron ./main.js\"",
@@ -21,9 +20,7 @@
     "build:full": "./setup-and-build.sh",
     "generate-icons": "electron-icon-builder --input=./public/icon.png --output=build",
     "postinstall": "electron-builder install-app-deps",
-    "electron:build:win:x64-only": "cross-env NODE_ENV=production vite build && npx electron-builder --win --x64 --publish=never",
-    "build:full:win": "node scripts/setup-windows-build-simple.js",
-    "build:installer:win": "node scripts/build-installer-only.js"
+    "build:win": "node scripts/build-windows.js"
   },
   "dependencies": {
     "@ai-sdk/vue": "^1.2.8",
@@ -66,6 +63,7 @@
   "devDependencies": {
     "@types/uuid": "^10.0.0",
     "@vitejs/plugin-vue": "^5.2.1",
+    "adm-zip": "^0.5.14",
     "autoprefixer": "^10.4.21",
     "concurrently": "^9.1.2",
     "cross-env": "^7.0.3",
@@ -137,7 +135,9 @@
       "artifactName": "${productName} Setup ${version}-${arch}.${ext}",
       "electronUpdaterCompatibility": ">=4.0.0",
       "verifyUpdateCodeSignature": false,
-      "signDlls": false
+      "signDlls": false,
+      "signAndEditExecutable": false,
+      "forceCodeSigning": false
     },
     "linux": {
       "icon": "build/icons",

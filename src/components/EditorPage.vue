@@ -1131,6 +1131,17 @@ onMounted(async () => {
   window.addEventListener('core-installed', handleCoreInstalled);
   window.addEventListener('core-uninstalled', handleCoreUninstalled);
   window.addEventListener('core-upgraded', handleCoreUpgraded);
+
+  // Listen for board list refresh events from main process
+  if (window.electronAPI?.onRefreshBoardList) {
+    window.electronAPI.onRefreshBoardList((data) => {
+      console.log('[EditorPage] Received refresh-board-list event:', data);
+      // Refresh board list with a slight delay to ensure core installation is complete
+      setTimeout(() => {
+        fetchBoardsAndPorts();
+      }, 500);
+    });
+  }
   
   // Load code (if not already loaded)
   // await loadCode(); 
@@ -1149,6 +1160,11 @@ onBeforeUnmount(() => {
   // Clear file change listener
   if (window.electronAPI && window.electronAPI.clearFileChangeListener) {
     window.electronAPI.clearFileChangeListener();
+  }
+  
+  // Clean up board refresh listener
+  if (window.electronAPI?.clearRefreshBoardListListener) {
+    window.electronAPI.clearRefreshBoardListListener();
   }
 
   // Reset window title to "Embedr" when project is closed

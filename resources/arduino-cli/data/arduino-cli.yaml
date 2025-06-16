@@ -1,26 +1,32 @@
-board_manager:
-    additional_urls:
-        - https://dl.espressif.com/dl/package_esp32_index.json
-daemon:
-    port: "50051"
+# Arduino CLI Configuration for Embedr
+# This configuration ensures portable operation with user projects
+
 directories:
-    data: .
-    downloads: downloads
-    user: .
-library:
-    enable_unsafe_install: false
-logging:
-    file: ""
-    format: text
-    level: info
-metrics:
-    addr: :9090
-    enabled: true
+  data: .
+  downloads: ./downloads
+  user: ./user
+
+# Network configuration for reliable downloads
 network:
-    connection_timeout: 1800s
-output:
-    no_color: false
-sketch:
-    always_export_binaries: false
+  connection_timeout: 1800s  # 30 minutes for slow connections
+  user_agent_ext: "embedr-app"
+
+# Disable telemetry for privacy
+telemetry:
+  enabled: false
+
+# Updater configuration
 updater:
-    enable_notification: true
+  enable_notification: false
+
+# Board manager settings
+board_manager:
+  additional_urls: []
+
+# Library settings
+library:
+  enable_unsafe_install: false
+
+# Logging
+logging:
+  level: "info"
