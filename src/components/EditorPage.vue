@@ -3,7 +3,7 @@
     <!-- Top Bar -->
     <div class="h-16 border-b bg-card flex items-center px-6 gap-4 shadow-sm flex-shrink-0">
       <button 
-        class="text-muted-foreground hover:text-foreground flex items-center gap-2 text-sm font-medium transition-colors"
+        class="h-10 px-3 py-2 text-muted-foreground hover:text-foreground flex items-center gap-2 text-sm font-medium transition-colors border border-border rounded-md bg-background hover:bg-accent hover:text-accent-foreground"
         @click="handleBack"
       >
         ← Back
@@ -12,7 +12,7 @@
       <div class="flex items-center gap-3">
         <!-- Board Select -->
         <Select v-model="selectedBoard">
-          <SelectTrigger class="w-[250px] bg-background">
+          <SelectTrigger class="w-[250px] h-10 bg-background border-border">
             <SelectValue :placeholder="'Select Board'">
               {{ selectedBoardName || 'Select Board' }} 
             </SelectValue>
@@ -50,7 +50,7 @@
         
         <!-- Port Select -->
         <Select v-model="selectedPort" @update:open="handlePortDropdownToggle">
-          <SelectTrigger class="w-[180px] bg-background">
+          <SelectTrigger class="w-[180px] h-10 bg-background border-border">
             <SelectValue placeholder="Select Port" />
           </SelectTrigger>
           <SelectContent>
@@ -62,8 +62,7 @@
         <Button
           v-if="Object.keys(boardConfigOptions).length > 0"
           variant="outline"
-          size="sm"
-          class="h-10"
+          class="h-10 px-3 py-2 border-border bg-background hover:bg-accent hover:text-accent-foreground"
           @click="showBoardOptionsModal = true"
         >
           Board Options
@@ -73,19 +72,19 @@
       <div class="ml-auto flex items-center gap-2">
         <!-- Library Manager Icon Button -->
         <Button 
-          variant="ghost" 
+          variant="outline" 
           size="icon" 
-          class="relative group" 
+          class="h-10 w-10 relative group border-border bg-background hover:bg-accent hover:text-accent-foreground" 
           @click="openLibraryModal" 
           :aria-label="'Manage Libraries'"
           title="Manage Libraries"
         >
-          <Book class="w-5 h-5" />
+          <Book class="w-4 h-4" />
           <span class="absolute left-1/2 -translate-x-1/2 top-full mt-2 px-2 py-1 rounded bg-black text-white text-xs opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-10 shadow-lg">Manage Libraries</span>
         </Button>
         <Button 
           variant="outline" 
-          class="bg-background hover:bg-secondary/80 relative group" 
+          class="h-10 px-3 py-2 border-border bg-background hover:bg-accent hover:text-accent-foreground relative group" 
           @click="handleCompile" 
           :disabled="compiling || !currentInoPath || !selectedBoard"
           aria-label="Compile"
@@ -98,7 +97,7 @@
         </Button>
         <Button 
           variant="default" 
-          class="relative group"
+          class="h-10 px-3 py-2 relative group"
           @click="handleUpload" 
           :disabled="compiling || uploading || !currentInoPath || !selectedBoard || !selectedPort"
           aria-label="Upload"
@@ -111,7 +110,7 @@
         </Button>
         <Button 
           variant="secondary" 
-          class="relative group"
+          class="h-10 px-3 py-2 relative group"
           :disabled="!isDirty" 
           @click="saveCurrentCode"
           aria-label="Save"
@@ -122,9 +121,9 @@
           </span>
         </Button>
         <Button 
-          variant="ghost" 
+          variant="outline" 
           size="icon" 
-          class="relative group" 
+          class="h-10 w-10 relative group border-border bg-background hover:bg-accent hover:text-accent-foreground" 
           @click="handleHistoryClick" 
           :disabled="!currentInoPath || versionsLoading"
           :aria-label="'Version History'"
@@ -133,7 +132,7 @@
           <div v-if="versionsLoading" class="absolute inset-0 flex items-center justify-center">
             <div class="animate-spin w-4 h-4 border-2 border-primary border-t-transparent rounded-full"></div>
           </div>
-          <History class="w-5 h-5" :class="{ 'opacity-0': versionsLoading }" />
+          <History class="w-4 h-4" :class="{ 'opacity-0': versionsLoading }" />
           <span class="absolute left-1/2 -translate-x-1/2 top-full mt-2 px-2 py-1 rounded bg-black text-white text-xs opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-10 shadow-lg">Version History</span>
         </Button>
       </div>
@@ -152,7 +151,7 @@
     />
     <!-- Board Options Modal -->
     <Dialog :open="showBoardOptionsModal" @update:open="showBoardOptionsModal = $event">
-      <DialogContent class="sm:max-w-[600px] max-h-[80vh] overflow-hidden flex flex-col bg-[#1E1E1E]" style="background-color: #1E1E1E !important;">
+      <DialogContent class="sm:max-w-[700px] max-h-[80vh] overflow-hidden flex flex-col bg-[#1E1E1E]" style="background-color: #1E1E1E !important;">
         <DialogHeader class="px-6 pt-6 pb-4 border-b border-[#333]">
           <DialogTitle class="flex items-center text-white/90">
             <svg xmlns="http://www.w3.org/2000/svg" class="mr-2 h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -168,28 +167,33 @@
         </DialogHeader>
         
         <div class="flex-1 overflow-y-auto pb-2 px-6 pt-4 space-y-4 custom-scrollbar">
-          <div v-if="Object.keys(boardConfigOptions).length === 0" class="py-8 text-center text-white/60">
-            <svg xmlns="http://www.w3.org/2000/svg" class="mx-auto h-10 w-10 text-white/30 mb-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <div v-if="Object.keys(boardConfigOptions).length === 0" class="py-12 text-center text-white/60">
+            <svg xmlns="http://www.w3.org/2000/svg" class="mx-auto h-12 w-12 text-white/20 mb-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
               <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
               <line x1="8" y1="21" x2="16" y2="21"></line>
               <line x1="12" y1="17" x2="12" y2="21"></line>
             </svg>
-            <p class="text-sm">No configuration options available</p>
-            <p class="text-xs text-white/50 mt-1">This board uses default settings.</p>
+            <h3 class="text-lg font-medium text-white/70 mb-2">No Configuration Options</h3>
+            <p class="text-sm text-white/50 max-w-md mx-auto">This board uses default settings and doesn't require additional configuration.</p>
           </div>
 
           <div v-else class="space-y-4">
-            <div v-for="(options, key) in boardConfigOptions" :key="key" class="border border-[#333] bg-[#252525] rounded-md overflow-hidden p-4" style="background-color: #252525 !important; border-color: #333 !important;">
-              <div class="space-y-3">
+            <div v-for="(options, key) in boardConfigOptions" :key="key" class="border border-[#333] bg-[#252525] rounded-lg overflow-hidden" style="background-color: #252525 !important; border-color: #333 !important;">
+              <div class="px-4 py-4 space-y-3">
                 <div class="flex items-center justify-between">
-                  <h4 class="font-medium text-sm text-white/90">{{ getOptionLabel(key) }}</h4>
-                  <span class="text-xs text-white/50 bg-[#333] px-2 py-1 rounded">{{ key }}</span>
+                  <div class="flex flex-col">
+                    <h4 class="font-medium text-sm text-white/90">{{ getOptionLabel(key) }}</h4>
+                    <span class="text-xs text-white/50 mt-0.5">{{ key }}</span>
+                  </div>
+                  <span class="text-xs text-white/50 bg-[#1E1E1E] px-2 py-1 rounded border border-[#333]">
+                    {{ options?.length || 0 }} option{{ (options?.length || 0) !== 1 ? 's' : '' }}
+                  </span>
                 </div>
                 <Select 
                   v-model="selectedBoardOptions[key]"
                   :disabled="!options || options.length === 0"
                 >
-                  <SelectTrigger class="w-full bg-[#1E1E1E] border-[#333] focus:ring-[#5B8EFF] focus:ring-offset-0 text-white/90" style="background-color: #1E1E1E !important; border-color: #333 !important;">
+                  <SelectTrigger class="w-full h-10 bg-[#1E1E1E] border-[#333] focus:ring-2 focus:ring-blue-500 focus:ring-offset-0 text-white/90" style="background-color: #1E1E1E !important; border-color: #333 !important;">
                     <SelectValue :placeholder="`Select ${getOptionLabel(key)}`" />
                   </SelectTrigger>
                   <SelectContent class="bg-[#252525] border-[#333]" style="background-color: #252525 !important; border-color: #333 !important;">
@@ -197,32 +201,29 @@
                       v-for="option in options" 
                       :key="option.value" 
                       :value="option.value"
-                      class="text-white/90 hover:bg-[#333] focus:bg-[#333]"
+                      class="text-white/90 hover:bg-[#1E1E1E] focus:bg-[#1E1E1E]"
                     >
-                      <div class="flex flex-col">
-                        <span class="text-sm">{{ option.label }}</span>
-                        <span v-if="option.value !== option.label" class="text-xs text-white/50">{{ option.value }}</span>
+                      <div class="flex flex-col py-1">
+                        <span class="text-sm font-medium leading-tight">{{ option.label }}</span>
+                        <span v-if="option.value !== option.label" class="text-xs text-white/50 mt-0.5">{{ option.value }}</span>
                       </div>
                     </SelectItem>
                   </SelectContent>
                 </Select>
-                <p v-if="options && options.length > 0" class="text-xs text-white/50">
-                  {{ options.length }} option{{ options.length !== 1 ? 's' : '' }} available
-                </p>
               </div>
             </div>
 
             <!-- Info Section -->
-            <div class="p-3 bg-blue-900/20 border border-blue-700/50 rounded-md text-sm text-blue-400">
-              <div class="flex items-start gap-2">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mt-0.5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <div class="p-4 bg-blue-900/20 border border-blue-700/50 rounded-lg text-sm text-blue-400">
+              <div class="flex items-start gap-3">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mt-0.5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <circle cx="12" cy="12" r="10"></circle>
                   <path d="M12 16v-4"></path>
                   <path d="M12 8h.01"></path>
                 </svg>
-                <div class="space-y-1">
-                  <p class="font-medium">Configuration Notes:</p>
-                  <ul class="space-y-1 text-xs">
+                <div class="space-y-2">
+                  <p class="font-medium text-blue-300">Configuration Notes:</p>
+                  <ul class="space-y-1 text-xs text-blue-400/90">
                     <li>• These settings affect compilation and upload behavior</li>
                     <li>• Changes are saved automatically and persist across sessions</li>
                     <li>• Some options may require specific hardware variants</li>
@@ -234,14 +235,17 @@
           </div>
         </div>
 
-        <DialogFooter class="px-6 py-4 mt-auto border-t border-[#333]">
-          <Button variant="secondary" @click="showBoardOptionsModal = false" class="border-[#444] hover:border-[#666] hover:bg-[#333] text-white/80">
+        <DialogFooter class="px-6 py-4 mt-auto border-t border-[#333] flex items-center justify-end gap-3">
+          <Button 
+            variant="outline" 
+            @click="showBoardOptionsModal = false" 
+            class="h-10 px-4 py-2 border-[#444] hover:border-[#666] hover:bg-[#333] text-white/80 hover:text-white/90"
+          >
             Cancel
           </Button>
           <Button 
-            type="submit" 
             @click="handleBoardOptionsSubmit"
-            class="bg-[#5B8EFF] hover:bg-[#5B8EFF]/90 text-white border-none"
+            class="h-10 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white border-none shadow-sm"
           >
             Save Configuration
           </Button>
@@ -270,26 +274,28 @@
             <div class="bg-card flex flex-col h-full shadow-inner">
               <!-- Tabs -->
               <div class="flex px-4 pt-1.5 pb-1.5 flex-shrink-0">
-                <nav class="inline-flex p-0.5 bg-muted rounded-lg tab_switching_bar" aria-label="Tabs" style="min-width: 180px">
+                <nav class="inline-flex p-0.5 bg-[#1A1A1A] rounded-lg" aria-label="Tabs" style="min-width: 220px; background-color: #1A1A1A !important;">
                   <button
                     @click="activeTab = 'serial'"
                     :class="[
-                      'relative flex-1 px-2 py-0.5 text-xs font-medium rounded-md transition-all duration-200 ease-out',
+                      'relative flex-1 px-2 py-1 text-xs font-medium rounded-md transition-all duration-200 ease-out',
                       activeTab === 'serial' 
-                        ? 'bg-background text-foreground shadow-sm' 
-                        : 'text-muted-foreground hover:text-foreground'
+                        ? 'bg-background text-foreground shadow-lg border border-border' 
+                        : 'text-muted-foreground hover:text-foreground hover:bg-background/50'
                     ]"
+                    style="box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);"
                   >
                     Serial Monitor
                   </button>
                   <button
                     @click="activeTab = 'output'"
                     :class="[
-                      'relative flex-1 px-2 py-0.5 text-xs font-medium rounded-md transition-all duration-200 ease-out flex items-center justify-center gap-1',
+                      'relative flex-1 px-2 py-1 text-xs font-medium rounded-md transition-all duration-200 ease-out flex items-center justify-center gap-1 ml-0.5 whitespace-nowrap',
                       activeTab === 'output' 
-                        ? 'bg-background text-foreground shadow-sm' // Standard active state
-                        : 'text-muted-foreground hover:text-foreground' // Standard inactive state
+                        ? 'bg-background text-foreground shadow-lg border border-border' 
+                        : 'text-muted-foreground hover:text-foreground hover:bg-background/50'
                     ]"
+                    style="box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);"
                   >
                     Output
                   </button>
@@ -2064,5 +2070,48 @@ function toggleAutoScroll() {
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background: #404040;
+}
+
+/* Tab styling fallbacks for older browsers */
+nav[aria-label="Tabs"] button {
+  /* Fallback for shadow-lg on older browsers */
+  -webkit-box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  -moz-box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  
+  /* Fallback for rounded corners */
+  -webkit-border-radius: 6px;
+  -moz-border-radius: 6px;
+  border-radius: 6px;
+  
+  /* Fallback for transitions */
+  -webkit-transition: all 0.2s ease-out;
+  -moz-transition: all 0.2s ease-out;
+  -o-transition: all 0.2s ease-out;
+  transition: all 0.2s ease-out;
+}
+
+/* Ensure text doesn't wrap on narrow screens */
+nav[aria-label="Tabs"] button {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0; /* Allow flex items to shrink */
+}
+
+/* Windows 10 specific adjustments */
+@media screen and (-ms-high-contrast: active), (-ms-high-contrast: none) {
+  nav[aria-label="Tabs"] {
+    background-color: #1A1A1A !important;
+  }
+  
+  nav[aria-label="Tabs"] button {
+    background-color: transparent;
+    border: 1px solid transparent;
+  }
+  
+  nav[aria-label="Tabs"] button:hover {
+    background-color: rgba(30, 30, 30, 0.5);
+  }
 }
 </style> 

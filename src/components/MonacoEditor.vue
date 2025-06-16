@@ -372,7 +372,8 @@ function createCustomCompletionProvider() {
         
       } catch (error) {
         console.error('[CustomCompletionProvider] Error providing completions:', error);
-        displayErrorTooltip(`Code completion error: ${error.message}`);
+        // Don't show network/API errors to users, only log them
+        // displayErrorTooltip(`Code completion error: ${error.message}`);
         return { suggestions: [] };
       }
     }
@@ -445,7 +446,8 @@ onMounted(async () => {
       console.log('[MonacoEditor] Custom completion provider registered successfully');
     } catch (error) {
       console.error('[MonacoEditor] Failed to register completion provider:', error);
-      displayErrorTooltip('Failed to initialize AI code completion');
+      // Don't show initialization errors to users, only log them
+      // displayErrorTooltip('Failed to initialize AI code completion');
     }
 
     // Additional editor event handlers for better UX

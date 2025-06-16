@@ -5,6 +5,7 @@
     @dragover.prevent="handleDragOver" 
     @dragleave.prevent="handleDragLeave" 
     @drop.prevent="handleFileDrop"
+    style="user-select: text;"
   >
     <!-- Chat Header -->
     <div class="flex items-center justify-between border-b border-[#1e1e1e] px-4 py-2">

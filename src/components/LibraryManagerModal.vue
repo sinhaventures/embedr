@@ -16,37 +16,40 @@
       
       <!-- Tabs Navigation -->
       <div class="px-6 pt-4 flex-shrink-0">
-        <nav class="inline-flex p-1 bg-[#252525] rounded-lg tab_switching_bar w-full" aria-label="Library Manager tabs" style="background-color: #252525 !important;">
+        <nav class="inline-flex p-0.5 bg-[#1A1A1A] rounded-lg w-full" aria-label="Library Manager tabs" style="background-color: #1A1A1A !important;">
           <button
             @click="activeLibraryTab = 'search'"
             :class="[
-              'relative flex-1 px-4 py-1.5 text-xs font-medium rounded-md rounded-tr-none rounded-br-none transition-all duration-200 ease-out',
+              'relative flex-1 px-2 py-1.5 text-xs font-medium rounded-md transition-all duration-200 ease-out whitespace-nowrap',
               activeLibraryTab === 'search' 
-                ? 'bg-[#333] text-white/90 shadow-sm' 
-                : 'text-white/60 hover:text-white/80'
+                ? 'bg-[#1E1E1E] text-white shadow-lg border border-[#333]' 
+                : 'text-white/60 hover:text-white/80 hover:bg-[#1E1E1E]/50'
             ]"
+            style="box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);"
           >
             Search & Install
           </button>
           <button
             @click="activeLibraryTab = 'installed'"
             :class="[
-              'relative flex-1 px-4 py-1.5 text-xs font-medium rounded-none transition-all duration-200 ease-out',
+              'relative flex-1 px-2 py-1.5 text-xs font-medium rounded-md transition-all duration-200 ease-out ml-0.5 whitespace-nowrap',
               activeLibraryTab === 'installed' 
-                ? 'bg-[#333] text-white/90 shadow-sm' 
-                : 'text-white/60 hover:text-white/80'
+                ? 'bg-[#1E1E1E] text-white shadow-lg border border-[#333]' 
+                : 'text-white/60 hover:text-white/80 hover:bg-[#1E1E1E]/50'
             ]"
+            style="box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);"
           >
             Installed Libraries
           </button>
           <button
             @click="activeLibraryTab = 'custom'"
             :class="[
-              'relative flex-1 px-4 py-1.5 text-xs font-medium rounded-md rounded-tl-none rounded-bl-none transition-all duration-200 ease-out',
+              'relative flex-1 px-2 py-1.5 text-xs font-medium rounded-md transition-all duration-200 ease-out ml-0.5 whitespace-nowrap',
               activeLibraryTab === 'custom' 
-                ? 'bg-[#333] text-white/90 shadow-sm' 
-                : 'text-white/60 hover:text-white/80'
+                ? 'bg-[#1E1E1E] text-white shadow-lg border border-[#333]' 
+                : 'text-white/60 hover:text-white/80 hover:bg-[#1E1E1E]/50'
             ]"
+            style="box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);"
           >
             Custom Libraries
           </button>
@@ -857,5 +860,46 @@ watch(() => props.open, (newValue) => {
 }
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background: #404040;
+}
+
+/* Tab styling fallbacks for older browsers */
+nav[aria-label="Library Manager tabs"] button {
+  /* Fallback for shadow-lg on older browsers */
+  -webkit-box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  -moz-box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  
+  /* Fallback for rounded corners */
+  -webkit-border-radius: 6px;
+  -moz-border-radius: 6px;
+  border-radius: 6px;
+  
+  /* Fallback for transitions */
+  -webkit-transition: all 0.2s ease-out;
+  -moz-transition: all 0.2s ease-out;
+  -o-transition: all 0.2s ease-out;
+  transition: all 0.2s ease-out;
+  
+  /* Ensure text doesn't wrap */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0; /* Allow flex items to shrink */
+}
+
+/* Windows 10 specific adjustments */
+@media screen and (-ms-high-contrast: active), (-ms-high-contrast: none) {
+  nav[aria-label="Library Manager tabs"] {
+    background-color: #1A1A1A !important;
+  }
+  
+  nav[aria-label="Library Manager tabs"] button {
+    background-color: transparent;
+    border: 1px solid transparent;
+  }
+  
+  nav[aria-label="Library Manager tabs"] button:hover {
+    background-color: rgba(30, 30, 30, 0.5);
+  }
 }
 </style> 

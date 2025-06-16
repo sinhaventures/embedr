@@ -3,7 +3,7 @@
   "private": true,
   "description": "Embedr - AI Powered Arduino IDE",
   "author": "Sinha Ventures <support@embedr.cc>",
-  "version": "0.0.3",
+  "version": "0.0.5",
   "type": "commonjs",
   "main": "main.js",
   "scripts": {
@@ -20,7 +20,8 @@
     "build:full": "./setup-and-build.sh",
     "generate-icons": "electron-icon-builder --input=./public/icon.png --output=build",
     "postinstall": "electron-builder install-app-deps",
-    "build:win": "node scripts/build-windows.js"
+    "build:win": "node scripts/build-windows.js",
+    "build:mac": "node scripts/build-mac.js"
   },
   "dependencies": {
     "@ai-sdk/vue": "^1.2.8",

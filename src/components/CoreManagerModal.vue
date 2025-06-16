@@ -23,49 +23,63 @@
 
         <!-- Arduino AVR Setup Status -->
         <div v-if="showArduinoSetupStatus" class="mb-6 bg-[#1A1A1A] border border-[#333] rounded-lg p-4">
-          <div class="flex items-center gap-3">
-            <div class="flex items-center gap-2">
-              <Loader2 v-if="isArduinoSetupInProgress" class="h-5 w-5 animate-spin text-blue-400" />
-              <CheckCircle2 v-else-if="arduinoSetupStatus?.status === 'completed' || arduinoSetupStatus?.status === 'already-installed'" class="h-5 w-5 text-green-400" />
-              <AlertCircle v-else-if="arduinoSetupStatus?.status === 'error'" class="h-5 w-5 text-red-400" />
-              <div class="w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center">
-                <span class="text-xs text-white font-bold">A</span>
-              </div>
-            </div>
-            <div class="flex-1">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
               <div class="flex items-center gap-2">
-                <h3 class="text-sm font-medium text-white/90">Arduino Core Setup</h3>
-                <span class="px-2 py-0.5 rounded text-xs" :class="setupStatusBadgeClasses">
-                  {{ setupStatusText }}
-                </span>
+                <Loader2 v-if="isArduinoSetupInProgress" class="h-5 w-5 animate-spin text-blue-400" />
+                <CheckCircle2 v-else-if="arduinoSetupStatus?.status === 'completed'" class="h-5 w-5 text-green-400" />
+                <AlertCircle v-else-if="arduinoSetupStatus?.status === 'error'" class="h-5 w-5 text-red-400" />
+                <div v-else class="w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center">
+                  <span class="text-xs text-white font-bold">A</span>
+                </div>
               </div>
-              <p class="text-xs text-white/60 mt-1">{{ setupStatusMessage }}</p>
+              <div class="flex-1">
+                <div class="flex items-center gap-2">
+                  <h3 class="text-sm font-medium text-white/90">Arduino Core Setup</h3>
+                  <span class="px-2 py-0.5 rounded text-xs" :class="setupStatusBadgeClasses">
+                    {{ setupStatusText }}
+                  </span>
+                </div>
+                <p class="text-xs text-white/60 mt-1">{{ setupStatusMessage }}</p>
+              </div>
             </div>
+            <!-- Close button - only show for completed/error states -->
+            <button 
+              v-if="!isArduinoSetupInProgress"
+              @click="dismissArduinoSetupStatus" 
+              class="rounded-full p-1.5 hover:bg-white/10 transition-colors ml-2 shrink-0"
+              aria-label="Dismiss Arduino setup status"
+              title="Dismiss"
+            >
+              <X class="h-4 w-4 text-white/60 hover:text-white/90" />
+            </button>
           </div>
         </div>
 
         <!-- Tabs Navigation -->
         <div class="mb-6">
-          <nav class="inline-flex p-1 bg-[#252525] rounded-lg tab_switching_bar w-full" aria-label="Board Manager tabs" style="background-color: #252525 !important;">
+          <nav class="inline-flex p-0.5 bg-[#1A1A1A] rounded-lg w-full" aria-label="Board Manager tabs" style="background-color: #1A1A1A !important;">
             <button
               @click="activeTab = 'installed'"
               :class="[
-                'relative flex-1 px-4 py-1.5 text-xs font-medium rounded-md rounded-tr-none rounded-br-none transition-all duration-200 ease-out',
+                'relative flex-1 px-3 py-1.5 text-xs font-medium rounded-md transition-all duration-200 ease-out whitespace-nowrap',
                 activeTab === 'installed' 
-                  ? 'bg-[#333] text-white/90 shadow-sm' 
-                  : 'text-white/60 hover:text-white/80'
+                  ? 'bg-[#1E1E1E] text-white shadow-lg border border-[#333]' 
+                  : 'text-white/60 hover:text-white/80 hover:bg-[#1E1E1E]/50'
               ]"
+              style="box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);"
             >
               Installed & Search
             </button>
             <button
               @click="activeTab = 'custom'"
               :class="[
-                'relative flex-1 px-4 py-1.5 text-xs font-medium rounded-md rounded-tl-none rounded-bl-none transition-all duration-200 ease-out',
+                'relative flex-1 px-3 py-1.5 text-xs font-medium rounded-md transition-all duration-200 ease-out ml-0.5 whitespace-nowrap',
                 activeTab === 'custom' 
-                  ? 'bg-[#333] text-white/90 shadow-sm' 
-                  : 'text-white/60 hover:text-white/80'
+                  ? 'bg-[#1E1E1E] text-white shadow-lg border border-[#333]' 
+                  : 'text-white/60 hover:text-white/80 hover:bg-[#1E1E1E]/50'
               ]"
+              style="box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);"
             >
               Custom URLs
             </button>
@@ -79,16 +93,38 @@
             <!-- Control Bar - Search and Update -->
             <div class="flex flex-wrap items-center justify-between gap-4 bg-[#252525] rounded-lg p-4 border border-[#333] mb-4" style="background-color: #252525 !important; border-color: #333 !important;">
               <div class="flex items-center gap-3">
-                <Button @click="updateIndex" :disabled="isUpdating || isCheckingUpdates || isUpdatingAll" variant="outline" size="sm" class="whitespace-nowrap h-9">
-                  <RefreshCcw v-if="isUpdating" class="h-4 w-4 animate-spin mr-2" />
-                  <RefreshCcw v-else class="h-4 w-4 mr-2" />
-                  Update Index
+                <Button @click="updateIndex" :disabled="isUpdating || isCheckingUpdates || isUpdatingAll" variant="outline" size="sm" class="whitespace-nowrap h-9 border-[#444] hover:border-[#666] hover:bg-[#333]">
+                  <template v-if="isUpdating">
+                    <span class="mr-1.5 h-3.5 w-3.5 inline-block border-2 border-t-transparent border-current rounded-full animate-spin"></span>
+                    Updating Index...
+                  </template>
+                  <template v-else-if="updateIndexDone">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="mr-1.5 h-3.5 w-3.5 text-green-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M20 6L9 17l-5-5"/>
+                    </svg>
+                    Done!
+                  </template>
+                  <template v-else>
+                    <RefreshCcw class="h-3.5 w-3.5 mr-1.5" />
+                    Update Index
+                  </template>
                 </Button>
                 
-                <Button @click="checkForUpdates" :disabled="isUpdating || isCheckingUpdates || isUpdatingAll" variant="outline" size="sm" class="whitespace-nowrap h-9">
-                  <ArrowUpCircle v-if="isCheckingUpdates" class="h-4 w-4 animate-spin mr-2" />
-                  <ArrowUpCircle v-else class="h-4 w-4 mr-2" />
-                  Check Updates
+                <Button @click="checkForUpdates" :disabled="isUpdating || isCheckingUpdates || isUpdatingAll" variant="outline" size="sm" class="whitespace-nowrap h-9 border-[#444] hover:border-[#666] hover:bg-[#333]">
+                  <template v-if="isCheckingUpdates">
+                    <span class="mr-1.5 h-3.5 w-3.5 inline-block border-2 border-t-transparent border-current rounded-full animate-spin"></span>
+                    Checking Updates...
+                  </template>
+                  <template v-else-if="checkUpdatesDone">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="mr-1.5 h-3.5 w-3.5 text-green-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M20 6L9 17l-5-5"/>
+                    </svg>
+                    Done!
+                  </template>
+                  <template v-else>
+                    <ArrowUpCircle class="h-3.5 w-3.5 mr-1.5" />
+                    Check Updates
+                  </template>
                 </Button>
                 
                 <Button 
@@ -127,8 +163,8 @@
               </div>
             </div>
 
-            <!-- Status Messages -->
-            <div v-if="statusMessage" 
+            <!-- Status Messages (filtered to exclude Update Index and Check Updates operations) -->
+            <div v-if="statusMessage && !isUpdateIndexOrCheckUpdatesMessage" 
                  :class="['p-4 rounded-lg text-sm mb-4', 
                          statusType === 'error' ? 'bg-red-900/30 text-red-300 border border-red-500/50' : 
                          statusType === 'success' ? 'bg-green-900/30 text-green-300 border border-green-500/50' : 
@@ -471,6 +507,8 @@ const isLoading = ref(true);
 const isUpdating = ref(false);
 const isCheckingUpdates = ref(false);
 const isUpdatingAll = ref(false);
+const updateIndexDone = ref(false);
+const checkUpdatesDone = ref(false);
 const installingCores = ref(new Set()); // Track which cores are being installed
 const uninstallingCores = ref(new Set()); // Track which cores are being uninstalled
 const upgradingCores = ref(new Set()); // Track which cores are being upgraded
@@ -500,14 +538,34 @@ const popularUrls = ref([
 
 // Arduino setup status tracking
 const arduinoSetupStatus = ref(null);
+const arduinoSetupDismissed = ref(false);
+
 const showArduinoSetupStatus = computed(() => {
-  return arduinoSetupStatus.value !== null && (
-    arduinoSetupStatus.value.status === 'checking' ||
-    arduinoSetupStatus.value.status === 'installing' ||
-    arduinoSetupStatus.value.status === 'updating-index' ||
-    arduinoSetupStatus.value.status === 'error' ||
-    (arduinoSetupStatus.value.status === 'completed' || arduinoSetupStatus.value.status === 'already-installed')
-  );
+  // Don't show if user has dismissed it
+  if (arduinoSetupDismissed.value) return false;
+  
+  // Don't show if no status available
+  if (!arduinoSetupStatus.value) return false;
+  
+  const status = arduinoSetupStatus.value.status;
+  
+  // Always show during active operations
+  if (status === 'checking' || status === 'installing' || status === 'updating-index') {
+    return true;
+  }
+  
+  // Show errors until dismissed
+  if (status === 'error') {
+    return true;
+  }
+  
+  // Show completed status briefly (will be auto-hidden or user can dismiss)
+  if (status === 'completed') {
+    return true;
+  }
+  
+  // Don't show for already-installed status (this was the main issue)
+  return false;
 });
 const isArduinoSetupInProgress = computed(() => {
   const status = arduinoSetupStatus.value?.status;
@@ -559,10 +617,51 @@ const setupStatusMessage = computed(() => {
   }
 });
 
+// Filter out status messages for Update Index and Check Updates operations
+const isUpdateIndexOrCheckUpdatesMessage = computed(() => {
+  if (!statusMessage.value) return false;
+  const message = statusMessage.value.toLowerCase();
+  return message.includes('updating board package index') || 
+         message.includes('checking for updates') ||
+         message.includes('board package index updated successfully') ||
+         message.includes('all packages are up to date') ||
+         message.includes('found updates for');
+});
+
+// Load Arduino setup dismissal state from localStorage
+function loadArduinoSetupDismissalState() {
+  try {
+    const dismissalData = localStorage.getItem('embedr-arduino-setup-dismissed');
+    if (dismissalData) {
+      const parsed = JSON.parse(dismissalData);
+      // Check if dismissal is still valid (within last 30 days)
+      const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
+      const isExpired = Date.now() - parsed.timestamp > thirtyDaysMs;
+      
+      if (!isExpired && parsed.dismissed) {
+        arduinoSetupDismissed.value = true;
+        console.log('[CoreManagerModal] Arduino setup status previously dismissed');
+      } else if (isExpired) {
+        // Clear expired dismissal
+        localStorage.removeItem('embedr-arduino-setup-dismissed');
+        console.log('[CoreManagerModal] Arduino setup dismissal expired, clearing');
+      }
+    }
+  } catch (error) {
+    console.warn('[CoreManagerModal] Error loading Arduino setup dismissal state:', error);
+    localStorage.removeItem('embedr-arduino-setup-dismissed');
+  }
+}
+
 // Watch for modal visibility to load data when shown
 watch(() => props.show, async (newVal) => {
   if (newVal) {
+    // Reset button states when modal opens
+    updateIndexDone.value = false;
+    checkUpdatesDone.value = false;
+    
     loadInstalledCores();
+    loadArduinoSetupDismissalState(); // Load dismissal state when modal opens
     if (activeTab.value === 'custom') {
       loadCustomUrls(); // Load custom URLs when modal opens if on custom tab
     }
@@ -573,6 +672,20 @@ watch(() => props.show, async (newVal) => {
       window.electronAPI.onArduinoAvrSetupStatus((data) => {
         console.log('[CoreManagerModal] Arduino setup status:', data);
         arduinoSetupStatus.value = data;
+        
+        // Reset dismissal if there's a new active operation
+        if (data && (data.status === 'checking' || data.status === 'installing' || data.status === 'updating-index' || data.status === 'error')) {
+          arduinoSetupDismissed.value = false;
+        }
+        
+        // Auto-dismiss completed status after 5 seconds
+        if (data && data.status === 'completed') {
+          setTimeout(() => {
+            if (arduinoSetupStatus.value?.status === 'completed') {
+              dismissArduinoSetupStatus();
+            }
+          }, 5000);
+        }
       });
     }
     
@@ -607,8 +720,13 @@ watch(activeTab, (newTab) => {
 // Load installed board packages on component mount if modal is visible
 onMounted(async () => {
   if (props.show) {
+    // Reset button states when component mounts
+    updateIndexDone.value = false;
+    checkUpdatesDone.value = false;
+    
     clearStatus();
     await loadInstalledCores();
+    loadArduinoSetupDismissalState(); // Load dismissal state on mount
     // Register progress event listener
     window.electronAPI.onCoreInstallProgress(handleInstallProgress);
     // Register Arduino setup status listener
@@ -616,6 +734,20 @@ onMounted(async () => {
       window.electronAPI.onArduinoAvrSetupStatus((data) => {
         console.log('[CoreManagerModal] Arduino setup status:', data);
         arduinoSetupStatus.value = data;
+        
+        // Reset dismissal if there's a new active operation
+        if (data && (data.status === 'checking' || data.status === 'installing' || data.status === 'updating-index' || data.status === 'error')) {
+          arduinoSetupDismissed.value = false;
+        }
+        
+        // Auto-dismiss completed status after 5 seconds
+        if (data && data.status === 'completed') {
+          setTimeout(() => {
+            if (arduinoSetupStatus.value?.status === 'completed') {
+              dismissArduinoSetupStatus();
+            }
+          }, 5000);
+        }
       });
     }
     
@@ -684,15 +816,19 @@ async function loadInstalledCores() {
 // Update board package index
 async function updateIndex() {
   isUpdating.value = true;
-  clearStatus();
-  showStatus('Updating board package index...', 'info');
+  updateIndexDone.value = false;
   
   try {
     const result = await window.electronAPI.updateCoreIndex();
     if (result.success) {
-      showStatus('Board package index updated successfully', 'success');
       // Reload installed board packages to reflect any changes
       await loadInstalledCores();
+      
+      // Show "Done!" state briefly
+      updateIndexDone.value = true;
+      setTimeout(() => {
+        updateIndexDone.value = false;
+      }, 2000);
     } else {
       showError(`Failed to update board package index: ${result.error}`);
     }
@@ -701,6 +837,8 @@ async function updateIndex() {
     showError(`Error: ${error.message || 'Unknown error'}`);
   } finally {
     isUpdating.value = false;
+    // Reset done state on error
+    updateIndexDone.value = false;
   }
 }
 
@@ -1061,8 +1199,7 @@ function handleInstallProgress(data) {
 // Check for available updates
 async function checkForUpdates() {
   isCheckingUpdates.value = true;
-  clearStatus();
-  showStatus('Checking for updates...', 'info');
+  checkUpdatesDone.value = false;
   
   try {
     const result = await window.electronAPI.outdated();
@@ -1075,13 +1212,20 @@ async function checkForUpdates() {
       const coreUpdatesCount = availableUpdates.value.cores.length;
       const libUpdatesCount = availableUpdates.value.libraries.length;
       
+      // Show "Done!" state briefly
+      checkUpdatesDone.value = true;
+      setTimeout(() => {
+        checkUpdatesDone.value = false;
+      }, 2000);
+      
+      // Optional: You can still log the results to console for debugging
       if (coreUpdatesCount === 0 && libUpdatesCount === 0) {
-        showStatus('All packages are up to date', 'success');
+        console.log('[CoreManagerModal] All packages are up to date');
       } else {
         const updates = [];
         if (coreUpdatesCount > 0) updates.push(`${coreUpdatesCount} board package${coreUpdatesCount > 1 ? 's' : ''}`);
         if (libUpdatesCount > 0) updates.push(`${libUpdatesCount} librar${libUpdatesCount > 1 ? 'ies' : 'y'}`);
-        showStatus(`Found updates for ${updates.join(' and ')}`, 'info');
+        console.log(`[CoreManagerModal] Found updates for ${updates.join(' and ')}`);
       }
     } else {
       showError(`Failed to check for updates: ${result.error}`);
@@ -1091,6 +1235,8 @@ async function checkForUpdates() {
     showError(`Error: ${error.message || 'Unknown error'}`);
   } finally {
     isCheckingUpdates.value = false;
+    // Reset done state on error
+    checkUpdatesDone.value = false;
   }
 }
 
@@ -1241,6 +1387,20 @@ function getUrlDisplayName(url) {
     return 'Custom Board Package';
   }
 }
+
+// Dismiss Arduino setup status
+function dismissArduinoSetupStatus() {
+  console.log('[CoreManagerModal] Dismissing Arduino setup status');
+  arduinoSetupDismissed.value = true;
+  
+  // Store dismissal in localStorage with timestamp
+  const dismissalData = {
+    dismissed: true,
+    timestamp: Date.now(),
+    version: arduinoSetupStatus.value?.status || 'unknown'
+  };
+  localStorage.setItem('embedr-arduino-setup-dismissed', JSON.stringify(dismissalData));
+}
 </script>
 
 <style scoped>
@@ -1262,5 +1422,45 @@ function getUrlDisplayName(url) {
 /* Force background colors */
 .board-manager .hover\:bg-\[\#252525\]:hover {
   background-color: #252525 !important;
+}
+
+/* Tab styling fallbacks for older browsers */
+nav[aria-label="Board Manager tabs"] button {
+  /* Fallback for shadow-lg on older browsers */
+  -webkit-box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  -moz-box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  
+  /* Fallback for rounded corners */
+  -webkit-border-radius: 6px;
+  -moz-border-radius: 6px;
+  border-radius: 6px;
+  
+  /* Fallback for transitions */
+  -webkit-transition: all 0.2s ease-out;
+  -moz-transition: all 0.2s ease-out;
+  -o-transition: all 0.2s ease-out;
+  transition: all 0.2s ease-out;
+  
+  /* Ensure text doesn't wrap */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Windows 10 specific adjustments */
+@media screen and (-ms-high-contrast: active), (-ms-high-contrast: none) {
+  nav[aria-label="Board Manager tabs"] {
+    background-color: #1A1A1A !important;
+  }
+  
+  nav[aria-label="Board Manager tabs"] button {
+    background-color: transparent;
+    border: 1px solid transparent;
+  }
+  
+  nav[aria-label="Board Manager tabs"] button:hover {
+    background-color: rgba(30, 30, 30, 0.5);
+  }
 }
 </style> 
