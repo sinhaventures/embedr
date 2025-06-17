@@ -80,7 +80,49 @@ function createWindow () {
   console.log('Current working directory:', process.cwd());
   console.log('__dirname:', __dirname);
   
-  mainWindow = new BrowserWindow({
+  // Determine the icon path based on the platform and environment
+  let iconPath;
+  
+  if (process.env.NODE_ENV === 'development') {
+    // In development, use the icon from the build directory
+    if (process.platform === 'win32') {
+      iconPath = path.resolve(APP_ROOT, 'build', 'icons', 'win', 'icon.ico');
+    } else if (process.platform === 'darwin') {
+      iconPath = path.resolve(APP_ROOT, 'build', 'icons', 'mac', 'icon.icns');
+    } else {
+      iconPath = path.resolve(APP_ROOT, 'build', 'icons', 'png', '256x256.png');
+    }
+    
+    // Fallback to PNG if platform-specific icon doesn't exist
+    if (!fs.existsSync(iconPath)) {
+      iconPath = path.resolve(APP_ROOT, 'public', 'icon.png');
+    }
+  } else {
+    // In production, the icon might not be needed in BrowserWindow if properly embedded in exe
+    // But let's try to set it anyway for runtime display
+    if (process.platform === 'win32') {
+      iconPath = path.resolve(APP_ROOT, 'build', 'icons', 'win', 'icon.ico');
+      // Alternative path in production
+      if (!fs.existsSync(iconPath)) {
+        iconPath = path.resolve(APP_ROOT, 'build', 'icons', 'icon.ico');
+      }
+    } else if (process.platform === 'darwin') {
+      iconPath = path.resolve(APP_ROOT, 'build', 'icons', 'mac', 'icon.icns');
+    } else {
+      iconPath = path.resolve(APP_ROOT, 'build', 'icons', 'png', '256x256.png');
+    }
+    
+    // If icon still doesn't exist, set to undefined to let OS use embedded icon
+    if (!fs.existsSync(iconPath)) {
+      console.log('Icon file not found at:', iconPath);
+      console.log('Letting OS use embedded executable icon instead');
+      iconPath = undefined;
+    }
+  }
+  
+  console.log('Using icon path:', iconPath);
+  
+  const windowOptions = {
     width: 1200,
     height: 800,
     minWidth: 1100,
@@ -92,7 +134,14 @@ function createWindow () {
       // Add partition to avoid database conflicts with other instances
       partition: 'persist:embedr-main'
     }
-  });
+  };
+  
+  // Only set icon if we have a valid path
+  if (iconPath) {
+    windowOptions.icon = iconPath;
+  }
+  
+  mainWindow = new BrowserWindow(windowOptions);
 
   // In development, use the Vite dev server
   if (process.env.NODE_ENV === 'development') {
@@ -133,6 +182,11 @@ function createWindow () {
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 app.whenReady().then(() => {
+  // Set the app user model ID for Windows (helps with proper taskbar icon display)
+  if (process.platform === 'win32') {
+    app.setAppUserModelId('com.embedr.app');
+  }
+  
   createWindow();
 
   // Ensure arduino:avr core is installed after window is created

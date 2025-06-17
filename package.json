@@ -91,11 +91,13 @@
     "asar": false,
     "nodeGypRebuild": false,
     "buildDependenciesFromSource": false,
+    "icon": "build/icons/icon",
     "files": [
       "dist/**/*",
       "main.js",
       "preload.js",
       "src/main/**/*",
+      "build/icons/**/*",
       "!src/assets/**/*",
       "!src/components/**/*",
       "!src/composables/**/*",
@@ -128,7 +130,7 @@
       "icon": "build/icons/mac/icon.icns"
     },
     "win": {
-      "icon": "build/icons/win/icon.ico",
+      "icon": "build/icons/icon.ico",
       "target": {
         "target": "nsis",
         "arch": ["x64"]
@@ -137,7 +139,7 @@
       "electronUpdaterCompatibility": ">=4.0.0",
       "verifyUpdateCodeSignature": false,
       "signDlls": false,
-      "signAndEditExecutable": false,
+      "signAndEditExecutable": true,
       "forceCodeSigning": false
     },
     "linux": {
