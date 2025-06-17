@@ -155,6 +155,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
         ipcRenderer.removeListener('port-selected-by-agent', listener);
      }
   },
+  onBoardOptionsSelectedByAgent: (callback) => {
+    const listener = (_event, options) => {
+      console.log(`[Preload onBoardOptionsSelectedByAgent] Event received, calling callback with options:`, options);
+      callback(options);
+    };
+    ipcRenderer.on('board-options-selected-by-agent', listener);
+    // Return a function to remove the listener
+    return () => {
+      console.log(`[Preload onBoardOptionsSelectedByAgent] Removing listener for board options`);
+      ipcRenderer.removeListener('board-options-selected-by-agent', listener);
+    }
+  },
   // --- END Board/Port Selection Sync ---
 
   // --- Agent CLI Output Display ---

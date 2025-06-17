@@ -1,7 +1,7 @@
 <template>
   <div class="flex flex-col h-full bg-[#1e1e1e] overflow-hidden">
     <!-- Terminal Content -->
-    <div ref="serialOutputContainer" class="flex-1 p-4 font-mono text-sm text-white overflow-auto">
+    <div ref="serialOutputContainer" class="flex-1 p-4 font-mono text-sm text-white overflow-auto" style="user-select: text;">
       <!-- Connection Status Message -->
       <div 
         v-if="connectionStatusMessage"

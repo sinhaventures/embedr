@@ -39,25 +39,7 @@ function getMainInoPath(projectPath) {
   return path.join(projectPath, `${projectName}.ino`);
 }
 
-// --- Board and Port Tools ---
-
-const listBoardsTool = tool(
-  async (_input, { config }) => {
-    console.log('[Agent Tool] Calling list-all-boards');
-    try {
-      const result = await invokeIpc('list-all-boards');
-      return result.success ? JSON.stringify(result.boards) : `Error listing boards: ${result.error}`;
-    } catch (error) {
-      console.error('[Agent Tool Error] listBoardsTool:', error);
-      return `Failed to execute list boards command: ${error.message}`;
-    }
-  },
-  {
-    name: 'listBoards',
-    description: 'List all available Arduino boards and their FQBNs (Fully Qualified Board Names). Use this if you need to know the FQBN for compiling or uploading.',
-    schema: z.object({}), // No input
-  }
-);
+// --- Port and Board Management Tools ---
 
 const listSerialPortsTool = tool(
   async (_input, { config }) => {
@@ -77,6 +59,244 @@ const listSerialPortsTool = tool(
   }
 );
 
+const setBoardConfigurationTool = tool(
+  async (inputArgs) => {
+    console.log('[Agent Tool] setBoardConfiguration raw inputArgs:', JSON.stringify(inputArgs, null, 2));
+    
+    // Attempt to parse nested structure if necessary
+    let fqbn, boardOptions;
+    
+    // Try different argument parsing strategies
+    if (typeof inputArgs === 'object' && inputArgs !== null && typeof inputArgs.input === 'string') {
+      try {
+        console.log('[Agent Tool] Detected nested input string, attempting to parse...');
+        const nestedArgs = JSON.parse(inputArgs.input);
+        fqbn = nestedArgs.fqbn;
+        boardOptions = nestedArgs.boardOptions;
+        console.log('[Agent Tool] Parsed nested args:', { fqbn, boardOptions });
+      } catch (parseError) {
+        console.error('[Agent Tool] Failed to parse nested input string:', parseError);
+        return 'Error: Failed to parse tool input arguments.';
+      }
+    } else if (typeof inputArgs === 'string') {
+      // Sometimes the entire input comes as a JSON string
+      try {
+        console.log('[Agent Tool] Input is a string, attempting to parse as JSON...');
+        const parsedArgs = JSON.parse(inputArgs);
+        fqbn = parsedArgs.fqbn;
+        boardOptions = parsedArgs.boardOptions;
+        console.log('[Agent Tool] Parsed string args:', { fqbn, boardOptions });
+      } catch (parseError) {
+        console.error('[Agent Tool] Failed to parse string input:', parseError);
+        return 'Error: Failed to parse tool input arguments as JSON string.';
+      }
+    } else if (typeof inputArgs === 'object' && inputArgs !== null) {
+       // Assume direct arguments if not nested
+       console.log('[Agent Tool] Assuming direct arguments.');
+       fqbn = inputArgs.fqbn;
+       boardOptions = inputArgs.boardOptions;
+    } else {
+      console.error('[Agent Tool] Invalid inputArgs type:', typeof inputArgs);
+      return 'Error: Invalid tool input arguments type.';
+    }
+
+    console.log('[Agent Tool] setBoardConfiguration processed args:', { fqbn, boardOptions });
+    
+    // Additional debug logging to understand the issue
+    if (!fqbn) {
+      console.error('[Agent Tool] FQBN is missing. Original inputArgs:', JSON.stringify(inputArgs, null, 2));
+      return 'Error: FQBN argument is missing.';
+    }
+    
+    // Special handling: If boardOptions is empty but we're in a scenario where it should have values,
+    // try to extract them from a potential flattened structure
+    if (!boardOptions || Object.keys(boardOptions).length === 0) {
+      console.log('[Agent Tool] boardOptions is empty, checking for flattened structure...');
+      
+      // Check if there are any keys in inputArgs that might be board options
+      if (typeof inputArgs === 'object' && inputArgs !== null) {
+        const potentialOptions = {};
+        for (const [key, value] of Object.entries(inputArgs)) {
+          if (key !== 'fqbn' && key !== 'input' && typeof value === 'string') {
+            potentialOptions[key] = value;
+          }
+        }
+        if (Object.keys(potentialOptions).length > 0) {
+          console.log('[Agent Tool] Found potential board options in flattened structure:', potentialOptions);
+          boardOptions = potentialOptions;
+        }
+      }
+    }
+    
+    try {
+      // Extract base FQBN and embedded options if present
+      let baseFqbn = fqbn;
+      let extractedOptions = {};
+      
+      // Check if FQBN has embedded options (format: vendor:arch:board:option1=value1,option2=value2)
+      const fqbnParts = fqbn.split(':');
+      if (fqbnParts.length > 3) {
+        // Extract base FQBN (first 3 parts)
+        baseFqbn = fqbnParts.slice(0, 3).join(':');
+        
+        // Extract embedded options from the 4th part onwards
+        const optionsString = fqbnParts.slice(3).join(':');
+        if (optionsString) {
+          const optionPairs = optionsString.split(',');
+          for (const pair of optionPairs) {
+            const [key, value] = pair.split('=');
+            if (key && value) {
+              extractedOptions[key.trim()] = value.trim();
+            }
+          }
+        }
+        console.log('[Agent Tool] Extracted from FQBN - Base:', baseFqbn, 'Options:', extractedOptions);
+      }
+      
+      // Merge extracted options with provided boardOptions (provided options take precedence)
+      const finalBoardOptions = { ...extractedOptions, ...(boardOptions || {}) };
+      console.log('[Agent Tool] Final board options to set:', finalBoardOptions);
+      
+      // Set the board selection first
+      const boardResult = await invokeIpc('set-selected-board', baseFqbn);
+      if (!boardResult.success) {
+        return `Failed to set board selection: ${boardResult.error || 'Unknown error'}`;
+      }
+      
+      // Set board options if any are available
+      if (Object.keys(finalBoardOptions).length > 0) {
+        const optionsResult = await invokeIpc('set-selected-board-options', finalBoardOptions);
+        if (!optionsResult.success) {
+          return `Board set successfully, but failed to set board options: ${optionsResult.error || 'Unknown error'}`;
+        }
+        return `Successfully set board to ${baseFqbn} with options: ${JSON.stringify(finalBoardOptions)}`;
+      } else {
+        return `Successfully set board to ${baseFqbn} (no additional options configured)`;
+      }
+    } catch (error) {
+      console.error('[Agent Tool Error] setBoardConfigurationTool:', error);
+      return `Failed to set board configuration: ${error.message}`;
+    }
+  },
+  {
+    name: 'setBoardConfiguration',
+    description: 'Set the board selection and optional board configuration options (like CPU frequency, flash size, etc.) that will be used for compilation and upload. This updates the global configuration. Supports both base FQBNs with separate boardOptions and full FQBNs with embedded options.',
+    schema: z.object({
+      fqbn: z.string().describe('The Fully Qualified Board Name (e.g., "arduino:avr:uno", "esp32:esp32:esp32", or "arduino:avr:nano:cpu=atmega328old").'),
+      boardOptions: z.record(z.string()).optional().describe('Optional board configuration options as key-value pairs (e.g., {"cpu": "atmega328old", "flash": "4m"}). If FQBN contains embedded options, these will override them.'),
+    }),
+  }
+);
+
+const setSerialPortTool = tool(
+  async (inputArgs) => {
+    console.log('[Agent Tool] setSerialPort raw inputArgs:', JSON.stringify(inputArgs, null, 2));
+    
+    // Attempt to parse nested structure if necessary
+    let port;
+    if (typeof inputArgs === 'object' && inputArgs !== null && typeof inputArgs.input === 'string') {
+      try {
+        console.log('[Agent Tool] Detected nested input string, attempting to parse...');
+        const nestedArgs = JSON.parse(inputArgs.input);
+        port = nestedArgs.port;
+        console.log('[Agent Tool] Parsed nested args:', { port });
+      } catch (parseError) {
+        console.error('[Agent Tool] Failed to parse nested input string:', parseError);
+        return 'Error: Failed to parse tool input arguments.';
+      }
+    } else if (typeof inputArgs === 'object' && inputArgs !== null) {
+       // Assume direct arguments if not nested
+       console.log('[Agent Tool] Assuming direct arguments.');
+       port = inputArgs.port;
+    } else {
+      console.error('[Agent Tool] Invalid inputArgs type:', typeof inputArgs);
+      return 'Error: Invalid tool input arguments type.';
+    }
+
+    console.log('[Agent Tool] setSerialPort processed args:', { port });
+    
+    if (!port) return 'Error: port argument is missing.';
+    
+    // Validate the port selection
+    if (port.includes('Bluetooth') || port.includes('bluetooth')) {
+      return 'Error: Selected port appears to be a Bluetooth port. Please select a physical USB port for your Arduino instead. Use the "listSerialPorts" tool to see available ports.';
+    }
+    
+    try {
+      const result = await invokeIpc('set-selected-port', port);
+      if (result.success) {
+        return `Successfully set serial port to: ${port}`;
+      } else {
+        return `Failed to set serial port: ${result.error || 'Unknown error'}`;
+      }
+    } catch (error) {
+      console.error('[Agent Tool Error] setSerialPortTool:', error);
+      return `Failed to set serial port: ${error.message}`;
+    }
+  },
+  {
+    name: 'setSerialPort',
+    description: 'Set the serial port that will be used for uploading and serial communication. This updates the global configuration.',
+    schema: z.object({
+      port: z.string().describe('The serial port path (e.g., "/dev/ttyACM0" or "COM3").'),
+    }),
+  }
+);
+
+const getBoardOptionsTool = tool(
+  async (inputArgs) => {
+    console.log('[Agent Tool] getBoardOptions raw inputArgs:', JSON.stringify(inputArgs, null, 2));
+    
+    // Attempt to parse nested structure if necessary
+    let fqbn;
+    if (typeof inputArgs === 'object' && inputArgs !== null && typeof inputArgs.input === 'string') {
+      try {
+        console.log('[Agent Tool] Detected nested input string, attempting to parse...');
+        const nestedArgs = JSON.parse(inputArgs.input);
+        fqbn = nestedArgs.fqbn;
+        console.log('[Agent Tool] Parsed nested args:', { fqbn });
+      } catch (parseError) {
+        console.error('[Agent Tool] Failed to parse nested input string:', parseError);
+        return 'Error: Failed to parse tool input arguments.';
+      }
+    } else if (typeof inputArgs === 'object' && inputArgs !== null) {
+       // Assume direct arguments if not nested
+       console.log('[Agent Tool] Assuming direct arguments.');
+       fqbn = inputArgs.fqbn;
+    } else {
+      console.error('[Agent Tool] Invalid inputArgs type:', typeof inputArgs);
+      return 'Error: Invalid tool input arguments type.';
+    }
+
+    console.log('[Agent Tool] getBoardOptions processed args:', { fqbn });
+    
+    if (!fqbn) return 'Error: FQBN argument is missing.';
+    
+    try {
+      const result = await invokeIpc('get-board-options', fqbn);
+      if (result.success) {
+        if (Object.keys(result.options).length === 0) {
+          return `Board ${fqbn} has no configurable options (uses default settings).`;
+        } else {
+          return `Available board options for ${fqbn}:\n${JSON.stringify(result.options, null, 2)}`;
+        }
+      } else {
+        return `Failed to get board options: ${result.error}`;
+      }
+    } catch (error) {
+      console.error('[Agent Tool Error] getBoardOptionsTool:', error);
+      return `Failed to get board options: ${error.message}`;
+    }
+  },
+  {
+    name: 'getBoardOptions',
+    description: 'Get available configuration options for a specific board (like CPU frequency, flash size, etc.). Use this to see what options can be set with setBoardConfiguration.',
+    schema: z.object({
+      fqbn: z.string().describe('The Fully Qualified Board Name (e.g., "arduino:avr:uno", "esp32:esp32:esp32").'),
+    }),
+  }
+);
+
 // --- Compile and Upload Tools ---
 
 const compileSketchTool = tool(
@@ -84,14 +304,15 @@ const compileSketchTool = tool(
     console.log('[Agent Tool] compileSketch raw inputArgs:', JSON.stringify(inputArgs, null, 2));
     
     // Attempt to parse nested structure if necessary
-    let fqbn, sketchPath;
+    let fqbn, sketchPath, boardOptions;
     if (typeof inputArgs === 'object' && inputArgs !== null && typeof inputArgs.input === 'string') {
       try {
         console.log('[Agent Tool] Detected nested input string, attempting to parse...');
         const nestedArgs = JSON.parse(inputArgs.input);
         fqbn = nestedArgs.fqbn;
         sketchPath = nestedArgs.sketchPath;
-        console.log('[Agent Tool] Parsed nested args:', { fqbn, sketchPath });
+        boardOptions = nestedArgs.boardOptions;
+        console.log('[Agent Tool] Parsed nested args:', { fqbn, sketchPath, boardOptions });
       } catch (parseError) {
         console.error('[Agent Tool] Failed to parse nested input string:', parseError);
         return 'Error: Failed to parse tool input arguments.';
@@ -101,12 +322,13 @@ const compileSketchTool = tool(
        console.log('[Agent Tool] Assuming direct arguments.');
        fqbn = inputArgs.fqbn;
        sketchPath = inputArgs.sketchPath;
+       boardOptions = inputArgs.boardOptions;
     } else {
       console.error('[Agent Tool] Invalid inputArgs type:', typeof inputArgs);
       return 'Error: Invalid tool input arguments type.';
     }
 
-    console.log('[Agent Tool] compileSketch processed args:', { fqbn, sketchPath });
+    console.log('[Agent Tool] compileSketch processed args:', { fqbn, sketchPath, boardOptions });
     
     // Validate required args received from agent
     if (!sketchPath) {
@@ -119,13 +341,46 @@ const compileSketchTool = tool(
     }
     
     try {
+      // Extract base FQBN and embedded options if present
+      let baseFqbn = fqbn;
+      let extractedOptions = {};
+      
+      // Check if FQBN has embedded options (format: vendor:arch:board:option1=value1,option2=value2)
+      const fqbnParts = fqbn.split(':');
+      if (fqbnParts.length > 3) {
+        // Extract base FQBN (first 3 parts)
+        baseFqbn = fqbnParts.slice(0, 3).join(':');
+        
+        // Extract embedded options from the 4th part onwards
+        const optionsString = fqbnParts.slice(3).join(':');
+        if (optionsString) {
+          const optionPairs = optionsString.split(',');
+          for (const pair of optionPairs) {
+            const [key, value] = pair.split('=');
+            if (key && value) {
+              extractedOptions[key.trim()] = value.trim();
+            }
+          }
+        }
+        console.log('[Agent Tool] Extracted from FQBN - Base:', baseFqbn, 'Options:', extractedOptions);
+      }
+      
+      // Merge extracted options with provided boardOptions (provided options take precedence)
+      const finalBoardOptions = { ...extractedOptions, ...(boardOptions || {}) };
+      
+      // Set board configuration if provided (updates global config)
+      if (Object.keys(finalBoardOptions).length > 0) {
+        await invokeIpc('set-selected-board-options', finalBoardOptions);
+        console.log('[Agent Tool] Updated global board options for compilation:', finalBoardOptions);
+      }
+      
       // Get the current board options from the global state
       const boardOptionsResult = await invokeIpc('get-current-board-options');
-      const boardOptions = boardOptionsResult?.options || {};
+      const currentBoardOptions = boardOptionsResult?.options || {};
       
       // Use our custom invokeIpc function with proper argument order and board options
-      console.log(`[Agent Tool] Calling invokeIpc('compile-sketch', ${fqbn}, ${JSON.stringify(boardOptions)}, ${sketchPath})`);
-      const result = await invokeIpc('compile-sketch', fqbn, boardOptions, sketchPath); 
+      console.log(`[Agent Tool] Calling invokeIpc('compile-sketch', ${baseFqbn}, ${JSON.stringify(currentBoardOptions)}, ${sketchPath})`);
+      const result = await invokeIpc('compile-sketch', baseFqbn, currentBoardOptions, sketchPath); 
 
       if (result.success) {
         // --- SUCCESS CASE --- 
@@ -272,18 +527,18 @@ const compileSketchTool = tool(
   },
   {
     name: 'compileSketch',
-    description: 'Compile the Arduino sketch. Requires the sketch path and the FQBN (Fully Qualified Board Name). The agent MUST extract sketchPath from the CONTEXT block.',
+    description: 'Compile the Arduino sketch. Requires the sketch path and the FQBN (Fully Qualified Board Name). The agent MUST extract sketchPath from the CONTEXT block. Can optionally set board configuration options. Supports both base FQBNs with separate boardOptions and full FQBNs with embedded options.',
     schema: z.object({
-      // projectPath no longer needed here if sketchPath is absolute
       sketchPath: z.string().describe('The absolute path to the main .ino sketch file. Extract this from the CONTEXT block provided in the user message.'),
-      fqbn: z.string().describe('The Fully Qualified Board Name (e.g., "arduino:avr:uno").'),
+      fqbn: z.string().describe('The Fully Qualified Board Name (e.g., "arduino:avr:uno" or "arduino:avr:nano:cpu=atmega328old").'),
+      boardOptions: z.record(z.string()).optional().describe('Optional board configuration options to set before compilation (e.g., {"cpu": "atmega328old", "flash": "4m"}). If FQBN contains embedded options, these will override them.'),
     }),
   }
 );
 
 const uploadSketchTool = tool(
-  async ({ fqbn, port, sketchPath }) => {
-    console.log('[Agent Tool] uploadSketch called with:', { fqbn, port, sketchPath });
+  async ({ fqbn, port, sketchPath, boardOptions }) => {
+    console.log('[Agent Tool] uploadSketch called with:', { fqbn, port, sketchPath, boardOptions });
 
     // Validate required args
     if (!sketchPath) return 'Error: sketchPath argument is missing.';
@@ -296,13 +551,49 @@ const uploadSketchTool = tool(
     }
 
     try {
+      // Extract base FQBN and embedded options if present
+      let baseFqbn = fqbn;
+      let extractedOptions = {};
+      
+      // Check if FQBN has embedded options (format: vendor:arch:board:option1=value1,option2=value2)
+      const fqbnParts = fqbn.split(':');
+      if (fqbnParts.length > 3) {
+        // Extract base FQBN (first 3 parts)
+        baseFqbn = fqbnParts.slice(0, 3).join(':');
+        
+        // Extract embedded options from the 4th part onwards
+        const optionsString = fqbnParts.slice(3).join(':');
+        if (optionsString) {
+          const optionPairs = optionsString.split(',');
+          for (const pair of optionPairs) {
+            const [key, value] = pair.split('=');
+            if (key && value) {
+              extractedOptions[key.trim()] = value.trim();
+            }
+          }
+        }
+        console.log('[Agent Tool] Extracted from FQBN - Base:', baseFqbn, 'Options:', extractedOptions);
+      }
+      
+      // Merge extracted options with provided boardOptions (provided options take precedence)
+      const finalBoardOptions = { ...extractedOptions, ...(boardOptions || {}) };
+      
+      // Update global configuration with provided settings
+      await invokeIpc('set-selected-board', baseFqbn);
+      await invokeIpc('set-selected-port', port);
+      
+      if (Object.keys(finalBoardOptions).length > 0) {
+        await invokeIpc('set-selected-board-options', finalBoardOptions);
+        console.log('[Agent Tool] Updated global board options for upload:', finalBoardOptions);
+      }
+      
       // Get the current board options from the global state
       const boardOptionsResult = await invokeIpc('get-current-board-options');
-      const boardOptions = boardOptionsResult?.options || {};
+      const currentBoardOptions = boardOptionsResult?.options || {};
       
       // Use our custom invokeIpc function with proper argument order and board options
-      console.log(`[Agent Tool] Calling invokeIpc('upload-sketch', ${fqbn}, ${JSON.stringify(boardOptions)}, ${port}, ${sketchPath})`);
-      const result = await invokeIpc('upload-sketch', fqbn, boardOptions, port, sketchPath);
+      console.log(`[Agent Tool] Calling invokeIpc('upload-sketch', ${baseFqbn}, ${JSON.stringify(currentBoardOptions)}, ${port}, ${sketchPath})`);
+      const result = await invokeIpc('upload-sketch', baseFqbn, currentBoardOptions, port, sketchPath);
       if (result.success) {
         let summary = "Upload successful!\n\n";
         
@@ -314,6 +605,12 @@ const uploadSketchTool = tool(
         // Add the detailed output (usually avrdude logs)
         if (result.output) {
           summary += `Upload Output:\n${result.output.trim()}\n`;
+        }
+        
+        // Mention the global config update
+        summary += `\nGlobal configuration updated: Board=${baseFqbn}, Port=${port}`;
+        if (Object.keys(finalBoardOptions).length > 0) {
+          summary += `, Options=${JSON.stringify(finalBoardOptions)}`;
         }
         
         return summary.trim();
@@ -344,12 +641,12 @@ const uploadSketchTool = tool(
   },
   {
     name: 'uploadSketch',
-    description: 'Upload the compiled Arduino sketch. Requires the sketch path, FQBN, and port path. The agent MUST extract sketchPath from the CONTEXT block.',
+    description: 'Upload the compiled Arduino sketch. Requires the sketch path, FQBN, and port path. The agent MUST extract sketchPath from the CONTEXT block. This tool automatically updates the global board and port configuration. Supports both base FQBNs with separate boardOptions and full FQBNs with embedded options.',
     schema: z.object({
-      // projectPath no longer needed here if sketchPath is absolute
       sketchPath: z.string().describe('The absolute path to the main .ino sketch file. Extract this from the CONTEXT block provided in the user message.'),
-      fqbn: z.string().describe('The Fully Qualified Board Name (e.g., "arduino:avr:uno").'),
+      fqbn: z.string().describe('The Fully Qualified Board Name (e.g., "arduino:avr:uno" or "arduino:avr:nano:cpu=atmega328old").'),
       port: z.string().describe('The serial port path (e.g., "/dev/ttyACM0" or "COM3").'),
+      boardOptions: z.record(z.string()).optional().describe('Optional board configuration options to set before upload (e.g., {"cpu": "atmega328old", "flash": "4m"}). If FQBN contains embedded options, these will override them.'),
     }),
   }
 );
@@ -767,8 +1064,10 @@ const selectPortTool = tool(
 
 // Export all tools as an array
 module.exports = [
-  listBoardsTool,
   listSerialPortsTool,
+  setBoardConfigurationTool,
+  setSerialPortTool,
+  getBoardOptionsTool,
   compileSketchTool,
   uploadSketchTool,
   connectSerialTool,

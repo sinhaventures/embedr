@@ -2565,16 +2565,28 @@ ipcMain.handle('restore-checkpoint', async (event, projectPath, checkpointPath) 
 
 // === Handlers for User Selection (NEW - to be called from renderer) ===
 ipcMain.handle('set-selected-board', (event, fqbn) => {
-  console.log(`[IPC Handler] set-selected-board called by UI with FQBN: ${fqbn}`);
+  console.log(`[IPC Handler] set-selected-board called with FQBN: ${fqbn}`);
   currentSelectedBoardFqbn = fqbn;
-  // Optionally, notify other parts or just store it
+  
+  // Emit event to UI when board is set by agent
+  if (mainWindow && mainWindow.webContents) {
+    mainWindow.webContents.send('board-selected-by-agent', fqbn);
+    console.log(`[IPC Handler] Sent board-selected-by-agent event to renderer with FQBN: ${fqbn}`);
+  }
+  
   return { success: true };
 });
 
 ipcMain.handle('set-selected-port', (event, portPath) => {
-  console.log(`[IPC Handler] set-selected-port called by UI with Port: ${portPath}`);
+  console.log(`[IPC Handler] set-selected-port called with Port: ${portPath}`);
   currentSelectedPortPath = portPath;
-  // Optionally, notify other parts or just store it
+  
+  // Emit event to UI when port is set by agent
+  if (mainWindow && mainWindow.webContents) {
+    mainWindow.webContents.send('port-selected-by-agent', portPath);
+    console.log(`[IPC Handler] Sent port-selected-by-agent event to renderer with port: ${portPath}`);
+  }
+  
   return { success: true };
 });
 // === END Handlers for User Selection ===
@@ -2585,6 +2597,10 @@ ipcMain.handle('handle-select-board', async (event, fqbn) => {
   console.log(`[IPC Handler] handle-select-board called by Agent with FQBN: ${fqbn}`);
   currentSelectedBoardFqbn = fqbn; // Update central state
   
+  // Clear board options when board changes and reset to appropriate defaults
+  console.log(`[IPC Handler] Clearing board options for board change to: ${fqbn}`);
+  currentSelectedBoardOptions = {};
+  
   // Detailed check before sending event
   if (mainWindow) {
     console.log(`[IPC Handler] mainWindow found. Is destroyed? ${mainWindow.isDestroyed()}`);
@@ -2593,6 +2609,11 @@ ipcMain.handle('handle-select-board', async (event, fqbn) => {
       try {
         mainWindow.webContents.send('board-selected-by-agent', fqbn);
         console.log(`[IPC Handler] Successfully called webContents.send('board-selected-by-agent', "${fqbn}")`);
+        
+        // Also send board options reset event to UI
+        mainWindow.webContents.send('board-options-selected-by-agent', {});
+        console.log(`[IPC Handler] Sent board-options-selected-by-agent event to reset options for new board`);
+        
         return { success: true };
       } catch (sendError) {
         console.error(`[IPC Handler] Error calling webContents.send:`, sendError);
@@ -3353,8 +3374,15 @@ ipcMain.handle('get-board-options', async (event, baseFqbn) => {
 
 // New IPC Handler: Set the selected board configuration options
 ipcMain.handle('set-selected-board-options', (event, options) => {
-  console.log(`[IPC Handler] set-selected-board-options called by UI with options:`, options);
+  console.log(`[IPC Handler] set-selected-board-options called with options:`, options);
   currentSelectedBoardOptions = options || {}; // Store the object { key: value, ... }
+  
+  // Emit event to UI when board options are set by agent
+  if (mainWindow && mainWindow.webContents) {
+    mainWindow.webContents.send('board-options-selected-by-agent', options);
+    console.log(`[IPC Handler] Sent board-options-selected-by-agent event to renderer with options:`, options);
+  }
+  
   return { success: true };
 });
 

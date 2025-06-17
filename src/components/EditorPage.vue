@@ -616,6 +616,7 @@ function saveBoardOptions(fqbn, options) {
 // --- IPC Event Listeners ---
 let unsubscribeBoardSelected = null;
 let unsubscribePortSelected = null;
+let unsubscribeBoardOptionsSelected = null;
 let unsubscribeAgentCliOutput = null;
 
 const setupIPCListeners = () => {
@@ -669,6 +670,26 @@ const setupIPCListeners = () => {
     console.error('[EditorPage] window.electronAPI or window.electronAPI.onPortSelectedByAgent NOT found!');
   }
 
+  // Add listener for board options selected by agent
+  if (window.electronAPI && typeof window.electronAPI.onBoardOptionsSelectedByAgent === 'function') {
+    console.log('[EditorPage] electronAPI.onBoardOptionsSelectedByAgent found. Registering listener...');
+    try {
+      unsubscribeBoardOptionsSelected = window.electronAPI.onBoardOptionsSelectedByAgent((options) => {
+        console.log('EditorPage received board-options-selected-by-agent:', options);
+        // Update the UI to reflect the options set by the agent
+        if (JSON.stringify(selectedBoardOptions.value) !== JSON.stringify(options)) {
+          console.log(`Updating selectedBoardOptions from`, selectedBoardOptions.value, 'to', options);
+          selectedBoardOptions.value = { ...options }; // Update local state
+        }
+      });
+      console.log(`[EditorPage] Board options listener registered. Unsubscribe function type: ${typeof unsubscribeBoardOptionsSelected}`);
+    } catch (error) {
+      console.error('[EditorPage] Error registering onBoardOptionsSelectedByAgent listener:', error);
+    }
+  } else {
+    console.error('[EditorPage] window.electronAPI or window.electronAPI.onBoardOptionsSelectedByAgent NOT found!');
+  }
+
   // Setup listener for agent CLI output
   if (window.electronAPI && typeof window.electronAPI.onShowAgentCliOutput === 'function') {
     console.log('[EditorPage] electronAPI.onShowAgentCliOutput found. Registering listener...');
@@ -700,6 +721,7 @@ const cleanupIPCListeners = () => {
   console.log('Cleaning up IPC listeners...');
   if (unsubscribeBoardSelected) unsubscribeBoardSelected();
   if (unsubscribePortSelected) unsubscribePortSelected();
+  if (unsubscribeBoardOptionsSelected) unsubscribeBoardOptionsSelected();
   if (unsubscribeAgentCliOutput) unsubscribeAgentCliOutput();
 };
 
