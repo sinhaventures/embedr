@@ -140,13 +140,21 @@ gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
 ### Development Scripts
 
 ```bash
-npm run dev                    # Vite dev server only
-npm run electron:dev          # Full Electron development
-npm run dev:emulators         # With Firebase emulators
-npm run build                 # Build frontend only
-npm run electron:build        # Build Electron app
-npm run build:full           # Complete build with Arduino CLI
-npm run prepare-arduino       # Setup Arduino cores
+npm run dev                    # Starts the Vite development server
+npm run build                  # Builds the frontend for production
+npm run preview                # Previews the production build locally
+npm run electron:dev           # Starts Electron development with Vite HMR
+npm run electron:prod          # Starts Electron in production mode (using Vite HMR)
+npm run electron:build         # Builds the Electron application for distribution
+npm run electron:start         # Builds and starts the Electron application
+npm run emulators:start        # Starts Firebase emulators
+npm run dev:emulators          # Starts development with Firebase emulators
+npm run prepare-arduino        # Sets up Arduino cores for the bundled Arduino CLI
+npm run build:full             # Performs a complete build with bundled Arduino CLI
+npm run generate-icons         # Generates application icons
+npm run postinstall            # Installs app dependencies for Electron Builder
+npm run build:win              # Builds for Windows
+npm run build:mac              # Builds for macOS
 ```
 
 ### Build Configuration

@@ -548,9 +548,6 @@ const updateDialog = ref({
   downloadUrl: ''
 });
 
-// Global flag to track if update check has been performed in this session
-const hasCheckedForUpdates = ref(false);
-
 // Computed property for truncated release notes
 const truncatedReleaseNotes = computed(() => {
   const notes = updateDialog.value.releaseNotes;
@@ -674,48 +671,6 @@ function handleCoreUpgraded(platformId) {
 async function checkForUpdates() {
   console.log('[HomePage] Checking for app updates...');
   
-  // Check if we've already performed an update check in this session
-  if (hasCheckedForUpdates.value) {
-    console.log('[HomePage] Update check already performed in this session, skipping...');
-    return;
-  }
-
-  // Check if we've checked recently (within last 6 hours)
-  const lastCheckTime = localStorage.getItem('embedr-last-update-check');
-  const now = Date.now();
-  const sixHours = 6 * 60 * 60 * 1000; // 6 hours in milliseconds
-  
-  if (lastCheckTime && (now - parseInt(lastCheckTime)) < sixHours) {
-    console.log('[HomePage] Update check performed recently, skipping...');
-    hasCheckedForUpdates.value = true;
-    
-    // Still show existing update dialog if there was a stored update
-    const storedUpdateData = localStorage.getItem('embedr-minimized-update-data');
-    if (storedUpdateData) {
-      try {
-        const updateData = JSON.parse(storedUpdateData);
-        // Show minimized state for existing update with complete data
-        updateDialog.value = {
-          show: false,
-          minimized: true,
-          currentVersion: updateData.currentVersion,
-          latestVersion: updateData.latestVersion,
-          releaseNotes: updateData.releaseNotes,
-          releaseUrl: updateData.releaseUrl,
-          downloadUrl: updateData.downloadUrl
-        };
-      } catch (error) {
-        console.error('[HomePage] Error parsing stored update data:', error);
-        localStorage.removeItem('embedr-minimized-update-data');
-      }
-    }
-    return;
-  }
-
-  // Mark that we're performing the check
-  hasCheckedForUpdates.value = true;
-  localStorage.setItem('embedr-last-update-check', now.toString());
-  
   try {
     if (window.electronAPI?.checkAppUpdate) {
       const result = await window.electronAPI.checkAppUpdate();
@@ -765,14 +720,6 @@ async function checkForUpdates() {
   } catch (error) {
     console.error('[HomePage] Error checking for updates:', error);
   }
-}
-
-// Function to force check for updates (can be called manually if needed)
-async function forceCheckForUpdates() {
-  console.log('[HomePage] Forcing update check...');
-  hasCheckedForUpdates.value = false;
-  localStorage.removeItem('embedr-last-update-check');
-  await checkForUpdates();
 }
 
 function minimizeUpdateDialog() {

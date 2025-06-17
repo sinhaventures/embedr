@@ -828,11 +828,38 @@ async function updateIndex() {
         updateIndexDone.value = false;
       }, 2000);
     } else {
-      showError(`Failed to update board package index: ${result.error}`);
+      // Provide more detailed error information and recovery suggestions
+      const errorMsg = result.error || 'Unknown error';
+      let userFriendlyError = `Failed to update board package index: ${errorMsg}`;
+      
+      // Check for common error patterns and provide specific guidance
+      if (errorMsg.includes('Some indexes could not be updated') || 
+          errorMsg.includes('no such file or directory') ||
+          errorMsg.includes('Loading index file')) {
+        userFriendlyError += `\n\nThis is likely due to:\n` +
+          `• Network connectivity issues\n` +
+          `• Invalid or broken custom board package URLs\n` +
+          `• Temporarily unavailable package servers\n\n` +
+          `Try:\n` +
+          `• Check your internet connection\n` +
+          `• Remove any recently added custom URLs that might be broken\n` +
+          `• Wait a moment and try updating the index again`;
+      } else if (errorMsg.includes('timeout') || errorMsg.includes('connection')) {
+        userFriendlyError += `\n\nThis appears to be a network connectivity issue. ` +
+          `Please check your internet connection and try again.`;
+      }
+      
+      showError(userFriendlyError);
+      throw new Error(errorMsg); // Throw to be caught by calling functions
     }
   } catch (error) {
     console.error('Error updating board package index:', error);
-    showError(`Error: ${error.message || 'Unknown error'}`);
+    // If it's not already our custom error, create a user-friendly one
+    if (!error.message.includes('Failed to update board package index')) {
+      const userFriendlyError = `Error updating board package index: ${error.message || 'Unknown error'}`;
+      showError(userFriendlyError);
+    }
+    throw error; // Re-throw for calling functions to handle
   } finally {
     isUpdating.value = false;
     // Reset done state on error
@@ -1274,23 +1301,97 @@ function isAlreadyInstalled(platformId) {
   return installedCores.value.some(core => core.id === platformId);
 }
 
-// Add a custom URL
+// Validate if a URL is accessible and check for potential issues
+async function validateCustomUrl(url) {
+  try {
+    // Basic URL format validation
+    new URL(url);
+    
+    // Check if URL ends with .json as expected for board package indexes
+    if (!url.endsWith('.json')) {
+      return { valid: false, error: 'Board package URLs should end with .json' };
+    }
+    
+    // Check for potentially problematic patterns
+    const isProblematic = isUrlPotentiallyProblematic(url);
+    const alternative = getSuggestedAlternative(url);
+    
+    if (isProblematic && alternative) {
+      const shouldContinue = confirm(
+        `Warning: This URL might be unreliable.\n\n` +
+        `URL: ${url}\n\n` +
+        `Issue: ${alternative.note}\n` +
+        `Suggestion: ${alternative.suggestion}\n\n` +
+        `Do you want to add it anyway?`
+      );
+      
+      if (!shouldContinue) {
+        return { valid: false, error: 'User cancelled due to URL reliability concerns' };
+      }
+    }
+    
+    return { valid: true, warning: isProblematic ? 'This URL may be unreliable' : null };
+  } catch (error) {
+    return { valid: false, error: 'Invalid URL format' };
+  }
+}
+
+// Add a custom URL with enhanced validation
 async function addCustomUrl() {
   if (!newCustomUrl.value.trim()) return;
+  
+  const url = newCustomUrl.value.trim();
+  
+  // Validate URL format first
+  const validation = await validateCustomUrl(url);
+  if (!validation.valid) {
+    showError(`Invalid URL: ${validation.error}`);
+    return;
+  }
   
   isAddingUrl.value = true;
   clearStatus();
   showStatus('Adding custom URL...', 'info');
   
   try {
-    const result = await window.electronAPI.addBoardManagerUrl(newCustomUrl.value.trim());
+    const result = await window.electronAPI.addBoardManagerUrl(url);
     if (result.success) {
       showStatus('Custom URL added successfully. Updating index...', 'info');
       newCustomUrl.value = '';
       // Reload custom URLs
       await loadCustomUrls();
-      // Update index to fetch new board definitions
-      await updateIndex();
+      
+      // Update index to fetch new board definitions - with better error handling
+      try {
+        await updateIndex();
+      } catch (indexError) {
+        console.error('Error updating index after adding URL:', indexError);
+        
+        // Offer to remove the problematic URL
+        const shouldRemove = confirm(
+          `The URL was added successfully, but updating the package index failed. ` +
+          `This may indicate the URL is invalid or currently unavailable.\n\n` +
+          `Error: ${indexError.message || 'Unknown error'}\n\n` +
+          `Would you like to remove the URL "${url}" to prevent further issues?`
+        );
+        
+        if (shouldRemove) {
+          try {
+            showStatus('Removing problematic URL...', 'info');
+            await removeCustomUrl(url);
+            showStatus('Problematic URL removed successfully', 'success');
+          } catch (removeError) {
+            showError(`Failed to remove URL: ${removeError.message || 'Unknown error'}`);
+          }
+        } else {
+          showError(
+            `URL was added but index update failed. ` +
+            `You can manually remove the URL later if needed. ` +
+            `Error: ${indexError.message || 'Unknown error'}`
+          );
+        }
+        // Don't throw the error - let the user continue
+      }
     } else {
       showError(`Failed to add custom URL: ${result.error}`);
     }
@@ -1358,14 +1459,14 @@ async function addSuggestedUrl(url) {
   await addCustomUrl();
 }
 
-// Get URL display name
+// Get URL display name with health indicators
 function getUrlDisplayName(url) {
   // Extract a friendly name from the URL
   try {
     const urlObj = new URL(url);
     const hostname = urlObj.hostname;
     
-    // Common mappings
+    // Common mappings with known status
     if (hostname.includes('espressif.com')) return 'ESP32 (Espressif)';
     if (hostname.includes('github.com') && url.includes('stm32duino')) return 'STM32 (STMicroelectronics)';
     if (hostname.includes('adafruit.github.io')) return 'Adafruit';
@@ -1384,6 +1485,39 @@ function getUrlDisplayName(url) {
     
     return 'Custom Board Package';
   }
+}
+
+// Check if a URL might be problematic based on common patterns
+function isUrlPotentiallyProblematic(url) {
+  const problematicPatterns = [
+    // GitHub raw URLs that might not be stable
+    /github\.com\/.*\/raw\//,
+    // Direct file URLs without proper hosting
+    /\/package_.*_index\.json$/,
+    // Non-HTTPS URLs (less reliable)
+    /^http:\/\//
+  ];
+  
+  return problematicPatterns.some(pattern => pattern.test(url));
+}
+
+// Get suggested alternatives for problematic URLs
+function getSuggestedAlternative(url) {
+  if (url.includes('stm32duino') && url.includes('github.com')) {
+    return {
+      suggestion: 'Consider using the official STM32 board manager URL from the Arduino IDE if available',
+      note: 'GitHub raw URLs can sometimes be unreliable'
+    };
+  }
+  
+  if (url.startsWith('http://')) {
+    return {
+      suggestion: 'Try using HTTPS version of this URL if available',
+      note: 'HTTP URLs may have connectivity issues'
+    };
+  }
+  
+  return null;
 }
 
 // Dismiss Arduino setup status

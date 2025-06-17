@@ -1061,10 +1061,22 @@ ipcMain.handle('core-update-index', async () => {
           if (stderrJson.error) {
             errorMessage = stderrJson.error;
           }
+          
+          // Add additional context for common errors
+          if (stderrJson.warnings && Array.isArray(stderrJson.warnings)) {
+            const warnings = stderrJson.warnings.join('; ');
+            if (warnings.includes('Loading index file') && warnings.includes('no such file or directory')) {
+              errorMessage += '\n\nThis error suggests that one or more custom board package URLs may be invalid or temporarily unavailable. Consider removing recently added custom URLs if the problem persists.';
+            }
+          }
         } catch (e) {
-          // If it's not valid JSON, use as-is
+          // If it's not valid JSON, provide helpful context for common patterns
+          if (stderr.includes('no such file or directory') && stderr.includes('index')) {
+            errorMessage += '\n\nThis error suggests that one or more board package index files could not be downloaded. This may be due to invalid URLs or network issues.';
+          }
         }
         
+        // Always resolve instead of rejecting to prevent hanging
         resolve({ success: false, error: errorMessage });
       }
     });
@@ -1072,6 +1084,7 @@ ipcMain.handle('core-update-index', async () => {
     childProcess.on('error', (error) => {
       clearTimeout(timeout);
       console.error(`[core-update-index] Process error:`, error);
+      // Always resolve instead of rejecting to prevent hanging
       resolve({ success: false, error: error.message });
     });
   });
@@ -1539,7 +1552,10 @@ ipcMain.handle('outdated', async (event) => {
     
     console.log(`[outdated] Running: ${cliPath} ${args.join(' ')}`);
     
-    const child = spawn(cliPath, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawn(cliPath, args, { 
+      stdio: ['ignore', 'pipe', 'pipe'],
+      cwd: configDir 
+    });
     
     let stdout = '';
     let stderr = '';
@@ -1588,7 +1604,10 @@ ipcMain.handle('lib-upgrade', async (event, libraryName) => {
     
     console.log(`[lib-upgrade] Running: ${cliPath} ${args.join(' ')}`);
     
-    const child = spawn(cliPath, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawn(cliPath, args, { 
+      stdio: ['ignore', 'pipe', 'pipe'],
+      cwd: configDir 
+    });
     
     let stdout = '';
     let stderr = '';
@@ -1633,7 +1652,10 @@ ipcMain.handle('lib-upgrade-all', async (event) => {
     
     console.log(`[lib-upgrade-all] Running: ${cliPath} ${args.join(' ')}`);
     
-    const child = spawn(cliPath, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawn(cliPath, args, { 
+      stdio: ['ignore', 'pipe', 'pipe'],
+      cwd: configDir 
+    });
     
     let stdout = '';
     let stderr = '';
@@ -1678,7 +1700,10 @@ ipcMain.handle('core-upgrade-all', async (event) => {
     
     console.log(`[core-upgrade-all] Running: ${cliPath} ${args.join(' ')}`);
     
-    const child = spawn(cliPath, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawn(cliPath, args, { 
+      stdio: ['ignore', 'pipe', 'pipe'],
+      cwd: configDir 
+    });
     
     let stdout = '';
     let stderr = '';
@@ -3733,7 +3758,7 @@ ipcMain.handle('lib-install-git', async (event, gitUrl, version) => {
 
     console.log('[lib-install-git] Executing:', command);
     
-    exec(command, (error, stdout, stderr) => {
+    exec(command, { cwd: arduinoDataDir }, (error, stdout, stderr) => {
       console.log('[lib-install-git] Command completed');
       console.log('[lib-install-git] stdout:', stdout);
       console.log('[lib-install-git] stderr:', stderr);
@@ -3805,7 +3830,7 @@ ipcMain.handle('lib-install-zip', async (event, zipPath) => {
     
     console.log('[lib-install-zip] Executing:', command);
     
-    exec(command, (error, stdout, stderr) => {
+    exec(command, { cwd: arduinoDataDir }, (error, stdout, stderr) => {
       console.log('[lib-install-zip] Command completed');
       console.log('[lib-install-zip] stdout:', stdout);
       console.log('[lib-install-zip] stderr:', stderr);
