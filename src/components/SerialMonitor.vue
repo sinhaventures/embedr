@@ -306,4 +306,100 @@ watch(serialOutput, () => {
 pre {
   font-family: 'Courier New', Courier, monospace;
 }
+
+/* Windows 10 and older browser fallbacks for ghost buttons */
+.ghost-button-fallback {
+  background-color: rgba(45, 45, 45, 0.8) !important;
+  border: 1px solid rgba(77, 77, 77, 0.8) !important;
+  color: rgba(255, 255, 255, 0.9) !important;
+}
+
+.ghost-button-fallback:hover {
+  background-color: rgba(60, 60, 60, 0.9) !important;
+  border-color: rgba(102, 102, 102, 0.9) !important;
+  color: white !important;
+}
+
+.ghost-button-fallback:disabled {
+  background-color: rgba(30, 30, 30, 0.5) !important;
+  border-color: rgba(51, 51, 51, 0.5) !important;
+  color: rgba(255, 255, 255, 0.3) !important;
+  cursor: not-allowed;
+}
+
+/* Windows 10 specific adjustments using media queries */
+@media screen and (-ms-high-contrast: active), (-ms-high-contrast: none) {
+  /* Target IE11/Edge Legacy and Windows 10 Edge */
+  button[class*="ghost"] {
+    background-color: rgba(45, 45, 45, 0.8) !important;
+    border: 1px solid rgba(77, 77, 77, 0.8) !important;
+    color: rgba(255, 255, 255, 0.9) !important;
+  }
+  
+  button[class*="ghost"]:hover {
+    background-color: rgba(60, 60, 60, 0.9) !important;
+    border-color: rgba(102, 102, 102, 0.9) !important;
+    color: white !important;
+  }
+  
+  button[class*="ghost"]:disabled {
+    background-color: rgba(30, 30, 30, 0.5) !important;
+    border-color: rgba(51, 51, 51, 0.5) !important;
+    color: rgba(255, 255, 255, 0.3) !important;
+  }
+}
+
+/* Fallback for browsers that don't support CSS custom properties (var()) */
+@supports not (color: var(--bg-background)) {
+  button[class*="ghost"] {
+    background-color: rgba(45, 45, 45, 0.8) !important;
+    border: 1px solid rgba(77, 77, 77, 0.8) !important;
+    color: rgba(255, 255, 255, 0.9) !important;
+  }
+  
+  button[class*="ghost"]:hover {
+    background-color: rgba(60, 60, 60, 0.9) !important;
+    border-color: rgba(102, 102, 102, 0.9) !important;
+    color: white !important;
+  }
+  
+  button[class*="ghost"]:disabled {
+    background-color: rgba(30, 30, 30, 0.5) !important;
+    border-color: rgba(51, 51, 51, 0.5) !important;
+    color: rgba(255, 255, 255, 0.3) !important;
+  }
+}
+
+/* Additional Windows 10 Chrome/Firefox fallbacks */
+@media screen and (min-width: 0\0) {
+  /* IE9+ */
+  button[class*="ghost"] {
+    background-color: #2d2d2d !important;
+    border: 1px solid #4d4d4d !important;
+    color: #e5e5e5 !important;
+  }
+  
+  button[class*="ghost"]:hover {
+    background-color: #3c3c3c !important;
+    border-color: #666666 !important;
+    color: white !important;
+  }
+}
+
+/* Webkit-specific fallbacks for older Chrome/Safari on Windows */
+@media screen and (-webkit-min-device-pixel-ratio: 0) {
+  button[class*="ghost"] {
+    -webkit-box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    -webkit-transition: all 0.2s ease;
+    transition: all 0.2s ease;
+  }
+  
+  button[class*="ghost"]:hover {
+    -webkit-transform: translateY(-1px);
+    transform: translateY(-1px);
+    -webkit-box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  }
+}
 </style> 

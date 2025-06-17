@@ -2151,6 +2151,26 @@ nav[aria-label="Tabs"] button:hover {
   color: rgba(255, 255, 255, 0.8) !important;
 }
 
+/* Windows 10 and older browser fallbacks for outline buttons */
+.outline-button-fallback {
+  background-color: rgba(30, 30, 30, 0.8) !important;
+  border: 1px solid rgba(68, 68, 68, 0.8) !important;
+  color: rgba(255, 255, 255, 0.9) !important;
+}
+
+.outline-button-fallback:hover {
+  background-color: rgba(51, 51, 51, 0.9) !important;
+  border-color: rgba(102, 102, 102, 0.9) !important;
+  color: white !important;
+}
+
+.outline-button-fallback:disabled {
+  background-color: rgba(20, 20, 20, 0.5) !important;
+  border-color: rgba(51, 51, 51, 0.5) !important;
+  color: rgba(255, 255, 255, 0.3) !important;
+  cursor: not-allowed;
+}
+
 /* Windows 10 specific adjustments */
 @media screen and (-ms-high-contrast: active), (-ms-high-contrast: none) {
   nav[aria-label="Tabs"] {
@@ -2169,6 +2189,62 @@ nav[aria-label="Tabs"] button:hover {
   
   nav[aria-label="Tabs"] button:hover {
     background-color: rgba(30, 30, 30, 0.5) !important;
+  }
+  
+  /* Target outline variant buttons */
+  button[class*="outline"] {
+    background-color: rgba(30, 30, 30, 0.8) !important;
+    border: 1px solid rgba(68, 68, 68, 0.8) !important;
+    color: rgba(255, 255, 255, 0.9) !important;
+  }
+  
+  button[class*="outline"]:hover {
+    background-color: rgba(51, 51, 51, 0.9) !important;
+    border-color: rgba(102, 102, 102, 0.9) !important;
+    color: white !important;
+  }
+  
+  button[class*="outline"]:disabled {
+    background-color: rgba(20, 20, 20, 0.5) !important;
+    border-color: rgba(51, 51, 51, 0.5) !important;
+    color: rgba(255, 255, 255, 0.3) !important;
+  }
+}
+
+/* Fallback for browsers that don't support CSS custom properties (var()) */
+@supports not (color: var(--bg-background)) {
+  button[class*="outline"] {
+    background-color: rgba(30, 30, 30, 0.8) !important;
+    border: 1px solid rgba(68, 68, 68, 0.8) !important;
+    color: rgba(255, 255, 255, 0.9) !important;
+  }
+  
+  button[class*="outline"]:hover {
+    background-color: rgba(51, 51, 51, 0.9) !important;
+    border-color: rgba(102, 102, 102, 0.9) !important;
+    color: white !important;
+  }
+  
+  button[class*="outline"]:disabled {
+    background-color: rgba(20, 20, 20, 0.5) !important;
+    border-color: rgba(51, 51, 51, 0.5) !important;
+    color: rgba(255, 255, 255, 0.3) !important;
+  }
+}
+
+/* Additional Windows 10 Chrome/Firefox fallbacks for outline buttons */
+@media screen and (min-width: 0\0) {
+  /* IE9+ */
+  button[class*="outline"] {
+    background-color: #1e1e1e !important;
+    border: 1px solid #444444 !important;
+    color: #e5e5e5 !important;
+  }
+  
+  button[class*="outline"]:hover {
+    background-color: #333333 !important;
+    border-color: #666666 !important;
+    color: white !important;
   }
 }
 </style> 
