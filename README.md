@@ -25,48 +25,12 @@
 - **Board Auto-Detection**: Automatically detects connected Arduino boards
 - **ESP Configuration**: Advanced ESP32/ESP8266 build and flash settings
 - **Custom Board URLs**: Support for third-party board packages
-
-### 📝 Advanced Code Editor
-- **Monaco Editor**: VS Code-quality editing experience with syntax highlighting
-- **C++/Arduino Syntax**: Full language support with IntelliSense
-- **Code Formatting**: Built-in clang-format integration
-- **Multi-file Projects**: Support for complex projects with multiple files
-- **Live Error Detection**: Real-time compilation feedback
-
-### 📚 Library Management
-- **Integrated Library Manager**: Search, install, and manage thousands of Arduino libraries
-- **Version Control**: Install specific library versions
-- **Custom Installation**: Support for Git repositories and ZIP files
-- **Library Search**: Find libraries by name, category, or functionality
-- **Update Management**: Keep libraries up to date
-
-### 🔍 Project Management
-- **Visual Project Browser**: Beautiful project cards with metadata
-- **Recent Projects**: Quick access to your recent work
-- **Project Templates**: Start from AI-generated or blank templates
-- **Project Renaming**: Easily organize your projects
-- **Smart Search**: Find projects quickly
-
-### 🛠️ Development Tools
-- **One-Click Compile & Upload**: Streamlined workflow from code to hardware
-- **Real-time Serial Monitor**: Debug with live serial communication
-- **Build Diagnostics**: Detailed compilation output and memory usage
-- **Version History**: Track and restore previous versions of your code
-- **Auto-save**: Never lose your work
-
-### 💬 Intelligent Chat System
-- **Project-Aware Conversations**: AI knows your current project context
-- **Multi-threaded Chats**: Organize conversations by topic
-- **Tool Integration**: AI can compile, upload, and modify code directly
-- **Chat History**: Persistent conversation history per project
-- **Image Support**: Share circuit diagrams and hardware photos
-
-### 🔐 User Experience
-- **Firebase Authentication**: Secure user accounts and data sync
-- **Dark Mode Interface**: Modern, eye-friendly design
-- **Cross-Platform**: Works on Windows, macOS, and Linux
-- **Keyboard Shortcuts**: Efficient workflow with hotkeys
-- **Responsive UI**: Adaptive interface that scales with your needs
+- **Advanced Code Editor**: VS Code-quality editing experience with syntax highlighting, C++/Arduino Syntax, Code Formatting, Multi-file Projects, and Live Error Detection.
+- **Library Management**: Integrated Library Manager for searching, installing, and managing thousands of Arduino libraries, with Version Control, Custom Installation, Library Search, and Update Management.
+- **Project Management**: Visual Project Browser with beautiful project cards, Recent Projects, Project Templates, Project Renaming, and Smart Search.
+- **Development Tools**: One-Click Compile & Upload, Real-time Serial Monitor, Build Diagnostics, Version History, and Auto-save.
+- **Embedr Agent**: Project-Aware Conversations where AI knows your current project context, Multi-threaded Chats, Tool Integration (AI can compile, upload, and modify code directly), Chat History, and Image Support.
+- **User Experience**: Firebase Authentication for secure user accounts and data sync, Dark Mode Interface, Cross-Platform compatibility, Keyboard Shortcuts, and Responsive UI.
 
 ## 🚀 Getting Started
 
@@ -143,69 +107,6 @@ embedr-app/
 ├── public/                   # Static files
 └── dist_electron/           # Production builds
 ```
-
-## 🔧 Technical Details
-
-### Architecture
-
-**Frontend**: Vue 3 + Vite + TypeScript + TailwindCSS
-**Backend**: Electron main process with Node.js
-**AI Integration**: LangChain with multiple LLM providers
-**Arduino Integration**: Arduino CLI subprocess management
-**Code Editor**: Monaco Editor with custom Arduino language support
-**UI Framework**: Shadcn/ui + Radix Vue components
-**Authentication**: Firebase Auth
-**Build System**: Electron Builder with multi-platform support
-
-### Key Technologies
-
-- **Electron 29**: Cross-platform desktop app framework
-- **Vue 3**: Progressive JavaScript framework with Composition API
-- **Monaco Editor**: Advanced code editor (VS Code engine)
-- **Arduino CLI**: Official Arduino command-line interface
-- **LangChain**: AI agent framework for tool integration
-- **Firebase**: Authentication and cloud functions
-- **TailwindCSS**: Utility-first CSS framework
-- **Vite**: Fast build tool and dev server
-
-### Arduino CLI Integration
-
-Embedr bundles Arduino CLI for a seamless experience:
-
-- **Cross-platform binaries**: Windows, macOS, Linux support
-- **Pre-installed cores**: AVR, SAMD, ESP8266, ESP32
-- **Portable configuration**: User-specific data directories
-- **Automatic core management**: Download and install board packages
-- **Custom board URLs**: Support for third-party hardware
-
-### AI Agent System
-
-The AI copilot can perform real Arduino development tasks:
-
-- **Board Selection**: `listBoards`, `selectBoard`
-- **Port Management**: `listSerialPorts`, `selectPort`
-- **Code Operations**: `getSketchContent`, `modifySketch`
-- **Build Tools**: `compileSketch`, `uploadSketch`
-- **Library Management**: `searchLibrary`, `installLibrary`
-- **Serial Communication**: `connectSerial`, `sendSerialData`
-
-### Data Storage
-
-- **Projects**: `~/EmbedrProjects/` 
-  - Project folders: `~/EmbedrProjects/[project-name]/`
-  - Metadata: `~/EmbedrProjects/.embedr/projects.json`
-  - Arduino CLI data: `~/EmbedrProjects/.embedr/arduino-cli/`
-    - Board packages: `~/EmbedrProjects/.embedr/arduino-cli/packages/`
-    - Libraries: `~/EmbedrProjects/.embedr/arduino-cli/downloads/`
-    - Configuration: `~/EmbedrProjects/.embedr/arduino-cli/arduino-cli.yaml`
-- **Settings**: `~/.embedr/` directory for user preferences
-- **Chat History**: Project-specific conversation storage in each project's `.embedr_chat/` folder
-- **Version History**: Automatic code snapshots
-- **Library Cache**: Arduino CLI data directory
-
-## 🌟 AI Models Supported
-
-Embedr currently uses **Google Gemini 2.5 Flash** for its AI capabilities. We are actively developing a "Bring Your Own Key" feature, which will allow users to integrate and utilize their preferred Large Language Models (LLMs) with Embedr in the near future.
 
 ## 🛡️ Firebase Setup
 
@@ -293,10 +194,8 @@ For commercial licensing options, please contact us at [contact@embedr.cc](mailt
 
 ## 📧 Support
 
-- **GitHub Issues**: [Report bugs and request features](https://github.com/your-username/embedr-app/issues)
-- **Documentation**: [Full documentation](https://docs.embedr.cc)
+- **GitHub Issues**: [Report bugs and request features](https://github.com/sinhaventures/embedr/issues)
 - **Email**: [support@embedr.cc](mailto:support@embedr.cc)
-- **Discord**: [Join our community](https://discord.gg/embedr)
 
 ## 🙏 Acknowledgments
 
