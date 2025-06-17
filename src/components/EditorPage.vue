@@ -54,7 +54,12 @@
             <SelectValue placeholder="Select Port" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem v-for="port in ports" :key="port.value" :value="port.value">{{ port.label }}</SelectItem>
+            <template v-if="ports.length > 0">
+              <SelectItem v-for="port in ports" :key="port.value" :value="port.value">{{ port.label }}</SelectItem>
+            </template>
+            <template v-else>
+              <div class="px-4 py-2 text-sm text-muted-foreground text-center">No serial ports available</div>
+            </template>
           </SelectContent>
         </Select>
 
@@ -1910,6 +1915,9 @@ async function handleBoardOptionsSubmit() {
     const plainOptionsToSend = JSON.parse(JSON.stringify(selectedBoardOptions.value || {}));
     await window.electronAPI.setSelectedBoardOptions(plainOptionsToSend);
   }
+  
+  // Close the board options dialog after saving
+  showBoardOptionsModal.value = false;
 }
 
 // --- NEW: Handle asking Embedr to fix error ---
