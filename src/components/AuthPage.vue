@@ -287,4 +287,102 @@ input:-webkit-autofill:focus {
   -webkit-text-fill-color: rgba(235, 235, 245, 0.9);
   transition: background-color 5000s ease-in-out 0s;
 }
+
+/* Windows 10 and older browser fallbacks for text buttons (excluding tab buttons) */
+.mt-6 button[class*="text-rose-400"] {
+  background-color: rgba(244, 63, 94, 0.1) !important;
+  border: 1px solid rgba(244, 63, 94, 0.3) !important;
+  color: rgba(244, 63, 94, 0.9) !important;
+  padding: 0.25rem 0.75rem !important;
+  border-radius: 0.5rem !important;
+}
+
+.mt-6 button[class*="text-rose-400"]:hover {
+  background-color: rgba(244, 63, 94, 0.2) !important;
+  border-color: rgba(244, 63, 94, 0.5) !important;
+  color: rgba(244, 63, 94, 1) !important;
+}
+
+.mt-6 button[class*="text-[#EBEBF5]"] {
+  background-color: rgba(235, 235, 245, 0.05) !important;
+  border: 1px solid rgba(235, 235, 245, 0.2) !important;
+  color: rgba(235, 235, 245, 0.6) !important;
+  padding: 0.25rem 0.5rem !important;
+  border-radius: 0.25rem !important;
+}
+
+.mt-6 button[class*="text-[#EBEBF5]"]:hover {
+  background-color: rgba(235, 235, 245, 0.1) !important;
+  border-color: rgba(235, 235, 245, 0.3) !important;
+  color: rgba(235, 235, 245, 0.9) !important;
+}
+
+/* Windows 10 specific adjustments */
+@media screen and (-ms-high-contrast: active), (-ms-high-contrast: none) {
+  .mt-6 button[class*="text-rose-400"] {
+    background-color: rgba(244, 63, 94, 0.15) !important;
+    border: 1px solid rgba(244, 63, 94, 0.4) !important;
+    color: rgba(244, 63, 94, 1) !important;
+  }
+  
+  .mt-6 button[class*="text-rose-400"]:hover {
+    background-color: rgba(244, 63, 94, 0.25) !important;
+    border-color: rgba(244, 63, 94, 0.6) !important;
+  }
+  
+  .mt-6 button[class*="text-[#EBEBF5]"] {
+    background-color: rgba(235, 235, 245, 0.1) !important;
+    border: 1px solid rgba(235, 235, 245, 0.25) !important;
+    color: rgba(235, 235, 245, 0.7) !important;
+  }
+  
+  .mt-6 button[class*="text-[#EBEBF5]"]:hover {
+    background-color: rgba(235, 235, 245, 0.15) !important;
+    border-color: rgba(235, 235, 245, 0.4) !important;
+    color: rgba(235, 235, 245, 0.95) !important;
+  }
+}
+
+/* Fallback for browsers that don't support CSS custom properties */
+@supports not (color: var(--bg-background)) {
+  .mt-6 button[class*="text-rose-400"] {
+    background-color: rgba(244, 63, 94, 0.15) !important;
+    border: 1px solid rgba(244, 63, 94, 0.4) !important;
+    color: rgba(244, 63, 94, 1) !important;
+  }
+  
+  .mt-6 button[class*="text-rose-400"]:hover {
+    background-color: rgba(244, 63, 94, 0.25) !important;
+    border-color: rgba(244, 63, 94, 0.6) !important;
+  }
+  
+  .mt-6 button[class*="text-[#EBEBF5]"] {
+    background-color: rgba(235, 235, 245, 0.1) !important;
+    border: 1px solid rgba(235, 235, 245, 0.25) !important;
+    color: rgba(235, 235, 245, 0.7) !important;
+  }
+  
+  .mt-6 button[class*="text-[#EBEBF5]"]:hover {
+    background-color: rgba(235, 235, 245, 0.15) !important;
+    border-color: rgba(235, 235, 245, 0.4) !important;
+    color: rgba(235, 235, 245, 0.95) !important;
+  }
+}
+
+/* IE9+ fallbacks */
+@media screen and (min-width: 0\0) {
+  .mt-6 button[class*="text-rose-400"] {
+    background-color: #f43f5e !important;
+    background-color: rgba(244, 63, 94, 0.15) !important;
+    border: 1px solid #f43f5e !important;
+    color: #f43f5e !important;
+  }
+  
+  .mt-6 button[class*="text-[#EBEBF5]"] {
+    background-color: #ebebf5 !important;
+    background-color: rgba(235, 235, 245, 0.1) !important;
+    border: 1px solid #ebebf5 !important;
+    color: #ebebf5 !important;
+  }
+}
 </style> 

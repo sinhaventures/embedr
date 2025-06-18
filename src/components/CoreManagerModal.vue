@@ -1602,6 +1602,55 @@ nav[aria-label="Board Manager tabs"] button:hover {
   color: rgba(255, 255, 255, 0.8) !important;
 }
 
+/* Windows 10 and older browser fallbacks for close buttons and modal buttons */
+button[class*="hover:bg-white/10"] {
+  background-color: rgba(255, 255, 255, 0.05) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  color: rgba(255, 255, 255, 0.6) !important;
+}
+
+button[class*="hover:bg-white/10"]:hover {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  border-color: rgba(255, 255, 255, 0.25) !important;
+  color: rgba(255, 255, 255, 0.9) !important;
+}
+
+button[class*="rounded-full"] {
+  background-color: rgba(255, 255, 255, 0.05) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  color: rgba(255, 255, 255, 0.6) !important;
+}
+
+button[class*="rounded-full"]:hover {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  border-color: rgba(255, 255, 255, 0.25) !important;
+  color: rgba(255, 255, 255, 0.9) !important;
+}
+
+button[class*="hover:bg-[#333]"] {
+  background-color: rgba(51, 51, 51, 0.5) !important;
+  border: 1px solid rgba(68, 68, 68, 0.5) !important;
+  color: rgba(255, 255, 255, 0.8) !important;
+}
+
+button[class*="hover:bg-[#333]"]:hover {
+  background-color: rgba(51, 51, 51, 0.9) !important;
+  border-color: rgba(68, 68, 68, 0.8) !important;
+  color: rgba(255, 255, 255, 0.95) !important;
+}
+
+button[class*="hover:border-[#666]"] {
+  background-color: rgba(30, 30, 30, 0.8) !important;
+  border: 1px solid rgba(68, 68, 68, 0.8) !important;
+  color: rgba(255, 255, 255, 0.9) !important;
+}
+
+button[class*="hover:border-[#666]"]:hover {
+  background-color: rgba(51, 51, 51, 0.9) !important;
+  border-color: rgba(102, 102, 102, 0.9) !important;
+  color: white !important;
+}
+
 /* Windows 10 specific adjustments */
 @media screen and (-ms-high-contrast: active), (-ms-high-contrast: none) {
   nav[aria-label="Board Manager tabs"] {
@@ -1620,6 +1669,133 @@ nav[aria-label="Board Manager tabs"] button:hover {
   
   nav[aria-label="Board Manager tabs"] button:hover {
     background-color: rgba(30, 30, 30, 0.5) !important;
+  }
+  
+  /* Close button and modal button fallbacks */
+  button[class*="hover:bg-white/10"] {
+    background-color: rgba(255, 255, 255, 0.08) !important;
+    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+    color: rgba(255, 255, 255, 0.7) !important;
+  }
+  
+  button[class*="hover:bg-white/10"]:hover {
+    background-color: rgba(255, 255, 255, 0.15) !important;
+    border-color: rgba(255, 255, 255, 0.3) !important;
+    color: rgba(255, 255, 255, 0.95) !important;
+  }
+  
+  button[class*="rounded-full"] {
+    background-color: rgba(255, 255, 255, 0.08) !important;
+    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+    color: rgba(255, 255, 255, 0.7) !important;
+  }
+  
+  button[class*="rounded-full"]:hover {
+    background-color: rgba(255, 255, 255, 0.15) !important;
+    border-color: rgba(255, 255, 255, 0.3) !important;
+    color: rgba(255, 255, 255, 0.95) !important;
+  }
+  
+  button[class*="hover:bg-[#333]"] {
+    background-color: rgba(51, 51, 51, 0.7) !important;
+    border: 1px solid rgba(68, 68, 68, 0.7) !important;
+    color: rgba(255, 255, 255, 0.85) !important;
+  }
+  
+  button[class*="hover:bg-[#333]"]:hover {
+    background-color: rgba(51, 51, 51, 1) !important;
+    border-color: rgba(68, 68, 68, 1) !important;
+    color: white !important;
+  }
+  
+  button[class*="hover:border-[#666]"] {
+    background-color: rgba(30, 30, 30, 0.9) !important;
+    border: 1px solid rgba(68, 68, 68, 0.9) !important;
+    color: rgba(255, 255, 255, 0.95) !important;
+  }
+  
+  button[class*="hover:border-[#666]"]:hover {
+    background-color: rgba(51, 51, 51, 1) !important;
+    border-color: rgba(102, 102, 102, 1) !important;
+    color: white !important;
+  }
+}
+
+/* Fallback for browsers that don't support CSS custom properties */
+@supports not (color: var(--bg-background)) {
+  button[class*="hover:bg-white/10"] {
+    background-color: rgba(255, 255, 255, 0.08) !important;
+    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+    color: rgba(255, 255, 255, 0.7) !important;
+  }
+  
+  button[class*="hover:bg-white/10"]:hover {
+    background-color: rgba(255, 255, 255, 0.15) !important;
+    border-color: rgba(255, 255, 255, 0.3) !important;
+    color: rgba(255, 255, 255, 0.95) !important;
+  }
+  
+  button[class*="rounded-full"] {
+    background-color: rgba(255, 255, 255, 0.08) !important;
+    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+    color: rgba(255, 255, 255, 0.7) !important;
+  }
+  
+  button[class*="rounded-full"]:hover {
+    background-color: rgba(255, 255, 255, 0.15) !important;
+    border-color: rgba(255, 255, 255, 0.3) !important;
+    color: rgba(255, 255, 255, 0.95) !important;
+  }
+  
+  button[class*="hover:bg-[#333]"] {
+    background-color: rgba(51, 51, 51, 0.7) !important;
+    border: 1px solid rgba(68, 68, 68, 0.7) !important;
+    color: rgba(255, 255, 255, 0.85) !important;
+  }
+  
+  button[class*="hover:bg-[#333]"]:hover {
+    background-color: rgba(51, 51, 51, 1) !important;
+    border-color: rgba(68, 68, 68, 1) !important;
+    color: white !important;
+  }
+  
+  button[class*="hover:border-[#666]"] {
+    background-color: rgba(30, 30, 30, 0.9) !important;
+    border: 1px solid rgba(68, 68, 68, 0.9) !important;
+    color: rgba(255, 255, 255, 0.95) !important;
+  }
+  
+  button[class*="hover:border-[#666]"]:hover {
+    background-color: rgba(51, 51, 51, 1) !important;
+    border-color: rgba(102, 102, 102, 1) !important;
+    color: white !important;
+  }
+}
+
+/* IE9+ fallbacks */
+@media screen and (min-width: 0\0) {
+  button[class*="hover:bg-white/10"] {
+    background-color: #333333 !important;
+    border: 1px solid #444444 !important;
+    color: #e5e5e5 !important;
+  }
+  
+  button[class*="hover:bg-white/10"]:hover {
+    background-color: #444444 !important;
+    border-color: #666666 !important;
+    color: white !important;
+  }
+  
+  button[class*="rounded-full"] {
+    background-color: #333333 !important;
+    border: 1px solid #444444 !important;
+    color: #e5e5e5 !important;
+  }
+  
+  button[class*="rounded-full"]:hover {
+    background-color: #444444 !important;
+    border-color: #666666 !important;
+    color: white !important;
   }
 }
 </style> 

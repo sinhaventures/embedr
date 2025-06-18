@@ -1438,4 +1438,146 @@ textarea::-webkit-scrollbar {
   width: 0;
   height: 0;
 }
+
+/* Windows 10 and older browser fallbacks for custom buttons */
+button[class*="hover:bg-[#1A1A1A]"] {
+  background-color: rgba(26, 26, 26, 0.3) !important;
+  border: 1px solid rgba(68, 68, 68, 0.4) !important;
+  color: rgba(255, 255, 255, 0.8) !important;
+}
+
+button[class*="hover:bg-[#1A1A1A]"]:hover {
+  background-color: rgba(26, 26, 26, 0.8) !important;
+  border-color: rgba(68, 68, 68, 0.6) !important;
+  color: rgba(255, 255, 255, 0.95) !important;
+}
+
+button[class*="bg-[#1A1A1A]"] {
+  background-color: rgba(26, 26, 26, 0.8) !important;
+  border: 1px solid rgba(68, 68, 68, 0.5) !important;
+  color: rgba(255, 255, 255, 0.9) !important;
+}
+
+button[class*="bg-[#1A1A1A]"]:hover {
+  background-color: rgba(37, 37, 37, 0.9) !important;
+  border-color: rgba(102, 102, 102, 0.7) !important;
+  color: white !important;
+}
+
+button[class*="hover:bg-[#252525]"] {
+  background-color: rgba(26, 26, 26, 0.8) !important;
+  border: 1px solid rgba(68, 68, 68, 0.5) !important;
+  color: rgba(255, 255, 255, 0.9) !important;
+}
+
+button[class*="hover:bg-[#252525]"]:hover {
+  background-color: rgba(37, 37, 37, 0.9) !important;
+  border-color: rgba(102, 102, 102, 0.7) !important;
+  color: white !important;
+}
+
+/* Windows 10 specific adjustments */
+@media screen and (-ms-high-contrast: active), (-ms-high-contrast: none) {
+  button[class*="hover:bg-[#1A1A1A]"] {
+    background-color: rgba(26, 26, 26, 0.5) !important;
+    border: 1px solid rgba(68, 68, 68, 0.6) !important;
+    color: rgba(255, 255, 255, 0.85) !important;
+  }
+  
+  button[class*="hover:bg-[#1A1A1A]"]:hover {
+    background-color: rgba(26, 26, 26, 0.9) !important;
+    border-color: rgba(68, 68, 68, 0.8) !important;
+    color: white !important;
+  }
+  
+  button[class*="bg-[#1A1A1A]"] {
+    background-color: rgba(26, 26, 26, 0.9) !important;
+    border: 1px solid rgba(68, 68, 68, 0.6) !important;
+    color: rgba(255, 255, 255, 0.95) !important;
+  }
+  
+  button[class*="bg-[#1A1A1A]"]:hover {
+    background-color: rgba(37, 37, 37, 1) !important;
+    border-color: rgba(102, 102, 102, 0.8) !important;
+    color: white !important;
+  }
+  
+  button[class*="hover:bg-[#252525]"] {
+    background-color: rgba(26, 26, 26, 0.9) !important;
+    border: 1px solid rgba(68, 68, 68, 0.6) !important;
+    color: rgba(255, 255, 255, 0.95) !important;
+  }
+  
+  button[class*="hover:bg-[#252525]"]:hover {
+    background-color: rgba(37, 37, 37, 1) !important;
+    border-color: rgba(102, 102, 102, 0.8) !important;
+    color: white !important;
+  }
+}
+
+/* Fallback for browsers that don't support CSS custom properties */
+@supports not (color: var(--bg-background)) {
+  button[class*="hover:bg-[#1A1A1A]"] {
+    background-color: rgba(26, 26, 26, 0.5) !important;
+    border: 1px solid rgba(68, 68, 68, 0.6) !important;
+    color: rgba(255, 255, 255, 0.85) !important;
+  }
+  
+  button[class*="hover:bg-[#1A1A1A]"]:hover {
+    background-color: rgba(26, 26, 26, 0.9) !important;
+    border-color: rgba(68, 68, 68, 0.8) !important;
+    color: white !important;
+  }
+  
+  button[class*="bg-[#1A1A1A]"] {
+    background-color: rgba(26, 26, 26, 0.9) !important;
+    border: 1px solid rgba(68, 68, 68, 0.6) !important;
+    color: rgba(255, 255, 255, 0.95) !important;
+  }
+  
+  button[class*="bg-[#1A1A1A]"]:hover {
+    background-color: rgba(37, 37, 37, 1) !important;
+    border-color: rgba(102, 102, 102, 0.8) !important;
+    color: white !important;
+  }
+  
+  button[class*="hover:bg-[#252525]"] {
+    background-color: rgba(26, 26, 26, 0.9) !important;
+    border: 1px solid rgba(68, 68, 68, 0.6) !important;
+    color: rgba(255, 255, 255, 0.95) !important;
+  }
+  
+  button[class*="hover:bg-[#252525]"]:hover {
+    background-color: rgba(37, 37, 37, 1) !important;
+    border-color: rgba(102, 102, 102, 0.8) !important;
+    color: white !important;
+  }
+}
+
+/* IE9+ fallbacks */
+@media screen and (min-width: 0\0) {
+  button[class*="hover:bg-[#1A1A1A]"] {
+    background-color: #1a1a1a !important;
+    border: 1px solid #444444 !important;
+    color: #e5e5e5 !important;
+  }
+  
+  button[class*="hover:bg-[#1A1A1A]"]:hover {
+    background-color: #252525 !important;
+    border-color: #666666 !important;
+    color: white !important;
+  }
+  
+  button[class*="bg-[#1A1A1A]"] {
+    background-color: #1a1a1a !important;
+    border: 1px solid #444444 !important;
+    color: #e5e5e5 !important;
+  }
+  
+  button[class*="bg-[#1A1A1A]"]:hover {
+    background-color: #252525 !important;
+    border-color: #666666 !important;
+    color: white !important;
+  }
+}
 </style>
